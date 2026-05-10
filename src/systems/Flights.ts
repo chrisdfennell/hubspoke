@@ -206,6 +206,32 @@ export function registerFlightHooks() {
     landArrivedPlanes();
     dispatchIdlePlanes();
   });
+  // Daily auto-repair sweep: gated by settings.autoRepairThreshold (0 = off).
+  // Mirrors the Workshop "Repair" button — full restore to 100% condition,
+  // charged at 2% × price × (1 − condition). Only the human's planes are
+  // touched; AI rivals manage their own (lack of) maintenance.
+  clock.onDay(() => {
+    const state = GameState.get();
+    const threshold = state.settings.autoRepairThreshold;
+    if (threshold <= 0) return;
+    const me = state.human;
+    for (const plane of me.planes) {
+      if (plane.status.kind !== 'idle') continue;
+      if (plane.condition >= threshold) continue;
+      const cost = Math.round((1 - plane.condition) * plane.model.price * 0.02);
+      if (me.cash < cost) {
+        state.pushNews(
+          `${plane.name} below auto-repair threshold but funds short (need ${'$' + cost.toLocaleString('en-US')}).`,
+        );
+        continue;
+      }
+      me.cash -= cost;
+      plane.condition = 1.0;
+      state.pushNews(
+        `${plane.name} auto-repaired to 100% (−$${cost.toLocaleString('en-US')}).`,
+      );
+    }
+  });
 }
 
 /** Helper for UI: human-readable status. */

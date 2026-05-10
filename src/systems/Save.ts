@@ -156,16 +156,29 @@ export function findEmptySlot(): number | null {
 let autoSaveRegistered = false;
 
 /**
- * Auto-save:
- *   - on every in-game hour
- *   - on browser tab close / refresh (beforeunload, pagehide)
- * Writes to the active slot. Caller is responsible for setActiveSlot first.
+ * Auto-save. Cadence is read live from `settings.autosaveCadence` each tick
+ * — flipping it in the Settings panel takes effect immediately, no reload.
+ *   - 'hour'   → write to the active slot on every in-game hour boundary
+ *   - 'day'    → write on every in-game day boundary
+ *   - 'manual' → no clock-driven saves; player uses the in-app Save button
+ * Browser-close save is gated by `settings.saveOnClose` (default true).
  */
 export function registerAutoSave() {
   if (autoSaveRegistered) return;
   autoSaveRegistered = true;
 
-  clock.onHour(() => saveNow());
-  window.addEventListener('beforeunload', () => { saveNow(); });
-  window.addEventListener('pagehide', () => { saveNow(); });
+  // Register both hour and day hooks; the live cadence setting decides which
+  // one actually fires saveNow(). Doing it this way means no lifecycle dance
+  // when the player flips the setting.
+  clock.onHour(() => {
+    if (GameState.get().settings.autosaveCadence === 'hour') saveNow();
+  });
+  clock.onDay(() => {
+    if (GameState.get().settings.autosaveCadence === 'day') saveNow();
+  });
+  const onClose = () => {
+    if (GameState.get().settings.saveOnClose) saveNow();
+  };
+  window.addEventListener('beforeunload', onClose);
+  window.addEventListener('pagehide', onClose);
 }

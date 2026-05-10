@@ -26,12 +26,40 @@ export interface GameSettings {
   minLoadFactorForTakeoff: number;
   /** Auto-pause the game whenever a room is entered. */
   pauseOnRoomEntry: boolean;
+  /** News-ticker category toggles. Milestones (★) always show regardless —
+   *  they're rare and gameplay-significant. */
+  showMineNews: boolean;
+  showRivalNews: boolean;
+  showEventNews: boolean;
+  /** How often the game writes to the active save slot. 'manual' disables
+   *  the timer; the player still gets saves from the in-app Save button. */
+  autosaveCadence: 'hour' | 'day' | 'manual';
+  /** Save to the active slot when the browser tab closes / refreshes. */
+  saveOnClose: boolean;
+  /** Demand-event impact dial. 'off' suppresses event rolls entirely;
+   *  'mild'/'harsh' scale demand multipliers, reputation deltas, and plane
+   *  condition damage by 0.5× / 1.5× around their nominal values. */
+  eventSeverity: 'off' | 'mild' | 'normal' | 'harsh';
+  /** Auto-repair planes that drop below this condition (0..1). 0 = off.
+   *  A daily hook charges the workshop repair cost when threshold is hit. */
+  autoRepairThreshold: number;
+  /** When false, route tooltips hide rival pricing entirely — you fly blind
+   *  against the competition. */
+  showCompetitorPrices: boolean;
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
   skipUnprofitable: false,
   minLoadFactorForTakeoff: 0,
   pauseOnRoomEntry: false,
+  showMineNews: true,
+  showRivalNews: true,
+  showEventNews: true,
+  autosaveCadence: 'hour',
+  saveOnClose: true,
+  eventSeverity: 'normal',
+  autoRepairThreshold: 0,
+  showCompetitorPrices: true,
 };
 
 /** Bump when a backwards-incompatible balance change ships. The migrator in

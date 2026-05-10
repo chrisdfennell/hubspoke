@@ -358,11 +358,21 @@ export class TravelAgencyScene extends RoomScene {
       const avg = (demandA + demandB) / 2;
       lines.push(`Active demand modifier: ×${avg.toFixed(2)} (events in effect)`);
     }
-    if (rivals.length > 0) {
-      const cheaper = rivals.filter(r => r.ticketPrice < route.ticketPrice).length;
-      lines.push(`Competition: ${rivals.length} rival route(s) on this pair, ${cheaper} cheaper than you`);
+    if (state.settings.showCompetitorPrices) {
+      if (rivals.length > 0) {
+        const cheaper = rivals.filter(r => r.ticketPrice < route.ticketPrice).length;
+        lines.push(`Competition: ${rivals.length} rival route(s) on this pair, ${cheaper} cheaper than you`);
+        // Per-rival price breakdown: shows whose price is what, so the player
+        // can decide whether to undercut a specific airline.
+        for (const r of rivals) {
+          const owner = state.players.find(p => p.routes.some(rr => rr.id === r.id));
+          lines.push(`  ${owner?.name ?? '?'}: ${formatMoney(r.ticketPrice)}`);
+        }
+      } else {
+        lines.push(`Competition: none — full demand`);
+      }
     } else {
-      lines.push(`Competition: none — full demand`);
+      lines.push(`Competition: hidden (enable in Settings)`);
     }
     if (sample) {
       const fp = flightProfit(sample, route);

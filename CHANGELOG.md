@@ -9,6 +9,43 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-10 — Five new Settings panel options
+
+Settings ([SettingsScene.ts](src/scenes/rooms/SettingsScene.ts)) gained two
+new sections (Save, World) and five new toggles/pickers. All persist with
+the save via `GameSettings`.
+
+- **News ticker categories** — three independent toggles for "Your airline",
+  "Rivals", and "World events". Milestones (★) always show.
+  ([HUDScene.ts](src/scenes/HUDScene.ts) — `HUDScene.classifyNews()` uses
+  prefix + your-name heuristics so we don't have to label every `pushNews`
+  call site at the source.)
+- **Autosave cadence** — Hourly / Daily / Manual. Both clock hooks are
+  always registered; the live setting decides which one actually fires
+  `saveNow()`. Plus a separate "Save on browser close" toggle for the
+  beforeunload/pagehide path. ([Save.ts](src/systems/Save.ts))
+- **World event severity** — Off / Mild / Normal / Harsh. `severityScalar()`
+  feeds `scaledMult()` (demand multipliers pulled toward 1.0) and
+  `scaledDelta()` (additive impacts like reputation, condition damage).
+  `'off'` short-circuits the daily event roll entirely.
+  ([Events.ts](src/systems/Events.ts))
+- **Auto-repair threshold** — Off / 15% / 30% / 50%. Daily hook in
+  registerFlightHooks sweeps idle planes below the threshold and runs the
+  same restore-to-100% repair the Workshop button uses, charged to cash;
+  insufficient funds pushes a news warning instead of failing silently.
+  ([Flights.ts](src/systems/Flights.ts))
+- **Show competitor prices in route tooltip** — Off hides the entire
+  Competition block from the route tooltip (you fly blind against rival
+  pricing). On, the tooltip now lists each rival's price by airline name in
+  addition to the cheaper-count line.
+  ([TravelAgencyScene.ts](src/scenes/rooms/TravelAgencyScene.ts))
+
+Also: extracted a small `addPresetRow()` helper in SettingsScene to share
+the right-aligned preset-button layout across the cadence, severity, and
+auto-repair pickers.
+
+---
+
 ## 2026-05-10 — Buyable gate expansions (8 → 12 per hub)
 
 Hubs used to expose a fixed 8 gates and silently wrap with modulo once you

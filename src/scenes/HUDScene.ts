@@ -262,17 +262,44 @@ export class HUDScene extends Phaser.Scene {
     });
   }
 
-  /** Rebuild the ticker text from the latest N news entries. */
+  /** Rebuild the ticker text from the latest N news entries, gated by the
+   *  ticker-category toggles in Settings. lastTickerNewsCount intentionally
+   *  tracks the *unfiltered* news count so that newly-pushed items still
+   *  trigger a re-roll even if they get filtered out — keeps the marquee
+   *  from going stale when only-rivals or only-mine flips on. */
   private refreshTickerContent() {
-    const news = GameState.get().news.slice(0, 30);
-    this.lastTickerNewsCount = news.length;
-    if (news.length === 0) {
-      this.tickerText.setText('📰  No news yet — quiet skies.');
+    const state = GameState.get();
+    const all = state.news.slice(0, 30);
+    this.lastTickerNewsCount = all.length;
+    const meName = state.human.name;
+    const s = state.settings;
+    const visible = all.filter(n => {
+      const c = HUDScene.classifyNews(n.text, meName);
+      if (c === 'milestone') return true;
+      if (c === 'mine')   return s.showMineNews;
+      if (c === 'rival')  return s.showRivalNews;
+      /* event */         return s.showEventNews;
+    });
+    if (visible.length === 0) {
+      const msg = all.length === 0
+        ? '📰  No news yet — quiet skies.'
+        : '📰  All news filtered — adjust ticker toggles in Settings.';
+      this.tickerText.setText(msg);
     } else {
       const sep = '   •   ';
-      this.tickerText.setText(`📰  ${news.map(n => n.text).join(sep)}${sep}`);
+      this.tickerText.setText(`📰  ${visible.map(n => n.text).join(sep)}${sep}`);
     }
     this.tickerText.x = GAME_WIDTH;
+  }
+
+  /** Heuristic newsroom classifier. We don't tag news entries at push time
+   *  (every call site would need updating), so we infer the category from
+   *  the headline prefix and whether the human's airline name appears. */
+  private static classifyNews(text: string, myName: string): 'mine' | 'rival' | 'event' | 'milestone' {
+    if (text.startsWith('★')) return 'milestone';
+    if (text.startsWith('⚠') || text.startsWith('✦') || text.startsWith('·')) return 'event';
+    if (text.includes(myName)) return 'mine';
+    return 'rival';
   }
 
   /** Scroll the ticker text leftward; restart when fully off-screen. Pauses
