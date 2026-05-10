@@ -5,6 +5,7 @@ import { Button } from '../../ui/Button';
 import { formatMoney } from '../../systems/Clock';
 import { ITEMS, ItemCategory } from '../../state/items';
 import { getPlaneModel } from '../../state/catalog';
+import { getCEO } from '../../state/ceos';
 
 const CATEGORY_LABEL: Record<ItemCategory, string> = {
   sabotage: 'Sabotage',
@@ -17,11 +18,20 @@ export class DutyFreeScene extends RoomScene {
 
   buildRoom() {
     const me = GameState.get().human;
+    const ceo = getCEO(me.ceoId);
+    // Mario's perk discounts all Duty Free purchases. Read live so a future
+    // CEO swap (via a save-edit or new game) takes effect without a rebuild.
+    const priceMult = ceo?.perks.dutyFreeMult ?? 1.0;
     const b = this.panelBounds;
     const left = b.x + 30;
     let y = b.y + 80;
 
     this.addText(left, y, `Cash: ${formatMoney(me.cash)}`, 16, me.cash < 0 ? '#ff7b88' : COLORS.accentText);
+    if (priceMult < 1) {
+      this.addText(left + 200, y + 4,
+        `CEO discount: ${Math.round((1 - priceMult) * 100)}% off all items`,
+        12, '#ffc857');
+    }
     y += 32;
 
     const cats: ItemCategory[] = ['sabotage', 'defense', 'boost'];
@@ -37,12 +47,13 @@ export class DutyFreeScene extends RoomScene {
 
       for (const item of ITEMS.filter(i => i.category === cat)) {
         const owned = me.inventory[item.id] ?? 0;
+        const price = Math.round(item.price * priceMult);
         this.addText(left,       y + 6, item.name, 13);
-        this.addText(left + 240, y + 6, formatMoney(item.price), 13);
+        this.addText(left + 240, y + 6, formatMoney(price), 13);
         this.addText(left + 340, y + 6, owned.toString(), 13);
         this.addText(left + 410, y + 6, item.description, 12, COLORS.textDim);
 
-        const canAfford = me.cash >= item.price;
+        const canAfford = me.cash >= price;
         const isInstantBoost = cat === 'boost';
         const buyLabel = isInstantBoost ? 'Buy & Use' : 'Buy';
 
@@ -53,7 +64,7 @@ export class DutyFreeScene extends RoomScene {
           disabled: !canAfford,
           onClick: () => {
             if (!canAfford) return;
-            me.cash -= item.price;
+            me.cash -= price;
             if (isInstantBoost) {
               this.applyBoost(item.id);
             } else {

@@ -2,6 +2,7 @@ import { Player, PlayerSnapshot } from './Player';
 import { Plane } from './Plane';
 import { Route } from './Route';
 import { DEFAULT_AIRLINES, HOME_AIRPORT, getCity, getPlaneModel } from './catalog';
+import { getCEO, DEFAULT_CEO_ID } from './ceos';
 import { getFuelPrice, setFuelPrice } from '../systems/Economy';
 import { GameEvent } from '../systems/Events';
 import { snapshotModifiers, restoreModifiers } from './demandModifiers';
@@ -156,11 +157,13 @@ export class GameState {
     return GameState.instance;
   }
 
-  /** Reset to a fresh new game. */
-  static reset(difficulty: Difficulty = 'normal'): GameState {
+  /** Reset to a fresh new game. CEO id is applied to the human player as
+   *  part of bootstrap so perks (starting cash bonus, starting inventory,
+   *  etc.) land before any system hooks fire. */
+  static reset(difficulty: Difficulty = 'normal', ceoId?: string): GameState {
     GameState.instance = new GameState();
     GameState.instance.difficulty = difficulty;
-    GameState.instance.bootstrap();
+    GameState.instance.bootstrap(ceoId);
     return GameState.instance;
   }
 
@@ -250,7 +253,7 @@ export class GameState {
     if (this.news.length > 200) this.news.length = 200;
   }
 
-  private bootstrap() {
+  private bootstrap(ceoId?: string) {
     const cfg = getDifficulty(this.difficulty);
     DEFAULT_AIRLINES.forEach((a, i) => {
       this.players.push(new Player(a.id, a.name, a.color, i !== 0, cfg.startCash, a.home));
@@ -274,6 +277,21 @@ export class GameState {
       this.stockPrices[a.id] = 50;
     }
 
-    this.pushNews(`Welcome to ${this.human.name}. Difficulty: ${cfg.label}.`);
+    // Apply CEO perks to the human. Starting cash + inventory are bootstrap
+    // concerns; the rest (repair discount, condition decay, duty-free mult,
+    // loan APR) is read live from ceos.ts by the respective systems.
+    const ceo = getCEO(ceoId) ?? getCEO(DEFAULT_CEO_ID);
+    if (ceo) {
+      this.human.ceoId = ceo.id;
+      if (ceo.perks.cashBonus) this.human.cash += ceo.perks.cashBonus;
+      if (ceo.perks.startingInventory) {
+        for (const [itemId, n] of Object.entries(ceo.perks.startingInventory)) {
+          this.human.inventory[itemId] = (this.human.inventory[itemId] ?? 0) + n;
+        }
+      }
+    }
+
+    const ceoLabel = ceo ? ` — CEO: ${ceo.name}` : '';
+    this.pushNews(`Welcome to ${this.human.name}. Difficulty: ${cfg.label}${ceoLabel}.`);
   }
 }

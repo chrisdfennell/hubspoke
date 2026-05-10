@@ -7,6 +7,7 @@ import { sound } from './Sound';
 import { clock } from './Clock';
 import { distanceKm, getCity } from '../state/catalog';
 import { Player } from '../state/Player';
+import { getCEO } from '../state/ceos';
 
 /** Convert a GameDate to a comparable minute count since year 0. Simplified. */
 function dateToMinutes(d: GameDate): number {
@@ -116,6 +117,71 @@ export function dispatchIdlePlanes() {
   }
 }
 
+/**
+ * Roll for a mid-flight failure on a plane that just landed. Probability and
+ * severity scale with how neglected the plane was — at >= 50% condition
+ * nothing happens; below that, lower condition means higher chance of an
+ * incident and a rising chance of a full crash. Only fires for revenue
+ * flights (caller skips this for ferry repositioning).
+ *
+ * Outcomes:
+ *   - Incident: plane forced to ≥50% condition via an emergency repair
+ *     charged to the player; reputation −5; pax compensation $2k per seat.
+ *   - Crash: plane removed from the fleet; reputation −25; pax compensation
+ *     $10k per passenger on board.
+ *
+ * Mitigation: settings.autoRepairThreshold (daily sweep) catches planes
+ * before they reach the danger zone if the player wants the hands-off route.
+ */
+function maybeMishap(player: Player, plane: Plane, passengers: number) {
+  if (plane.condition >= 0.5) return;
+  // Linear ramp from 0% chance at cond=0.5 to 20% at cond=0.0.
+  const failChance = (0.5 - plane.condition) * 0.4;
+  if (Math.random() >= failChance) return;
+
+  const state = GameState.get();
+  // Below 15% condition there's a 30% chance the incident is a full crash.
+  const crashOdds = plane.condition < 0.15 ? 0.3 : 0;
+  const crashed = Math.random() < crashOdds;
+
+  if (crashed) {
+    const paxLoss = passengers * 10_000;
+    player.cash -= paxLoss;
+    player.reputation = Math.max(0, player.reputation - 25);
+    // Drop the plane from the fleet. routeId references go stale gracefully
+    // — flightProfit / dispatch all key off the plane object itself.
+    const idx = player.planes.indexOf(plane);
+    if (idx >= 0) player.planes.splice(idx, 1);
+    if (!player.isAI) {
+      state.pushNews(
+        `★ ${plane.name} (${player.name}) crashed — ${passengers} pax. ` +
+        `Aircraft lost, reputation −25, ${formatPaxLoss(paxLoss)} in claims.`,
+      );
+      sound.play('alert');
+    } else {
+      state.pushNews(`${player.name} lost a plane (${plane.name}) in a crash.`);
+    }
+  } else {
+    const paxLoss = passengers * 2_000;
+    player.cash -= paxLoss;
+    player.reputation = Math.max(0, player.reputation - 5);
+    // Emergency repair to 50% — the plane lives but is grounded until the
+    // player tops it up in the Workshop (or until auto-repair fires).
+    plane.condition = Math.max(plane.condition, 0.5);
+    if (!player.isAI) {
+      state.pushNews(
+        `⚠ ${plane.name} declared an emergency landing — pax compensated ${formatPaxLoss(paxLoss)}, ` +
+        `reputation −5, plane patched to 50%.`,
+      );
+      sound.play('alert');
+    }
+  }
+}
+
+function formatPaxLoss(n: number): string {
+  return `$${Math.round(n).toLocaleString('en-US')}`;
+}
+
 /** Land planes whose arrival time has passed; pay revenue. */
 export function landArrivedPlanes() {
   const state = GameState.get();
@@ -135,10 +201,12 @@ export function landArrivedPlanes() {
         }
         const result = flightProfit(plane, route);
         player.cash += result.profit;
-        // Per-flight wear: small. A Cessna doing 20-30 flights a day used to lose
-        // 10-15% condition daily; now it loses 2-3%, so a plane lasts roughly a
-        // month of heavy use before needing a serious overhaul.
-        plane.condition = Math.max(0, plane.condition - 0.001);
+        // Per-flight wear: small. A Cessna doing 20-30 flights a day used to
+        // lose 10-15% condition daily; now it loses 2-3%, so a plane lasts
+        // roughly a month of heavy use before needing a serious overhaul.
+        // Igor's CEO perk halves this decay rate.
+        const decayMult = getCEO(player.ceoId)?.perks.conditionDecayMult ?? 1.0;
+        plane.condition = Math.max(0, plane.condition - 0.001 * decayMult);
         plane.status = { kind: 'idle', airportId: arrivedAt };
         lastLandedAt[plane.id] = now;
         if (!player.isAI) {
@@ -148,11 +216,20 @@ export function landArrivedPlanes() {
           );
           sound.play('land');
         }
+        // Post-landing mishap check. A neglected plane (condition < 0.5)
+        // rolls for an incident; the lower the condition, the higher the
+        // chance and the worse the outcome. Crashes destroy the plane;
+        // incidents force an immediate emergency repair + reputation hit.
+        // Player.id is passed so AI rivals' planes can crash too — only
+        // human gets a news headline.
+        maybeMishap(player, plane, result.passengers);
       } else if (status.kind === 'ferry') {
         if (now < status.arrivesAt) continue;
         const arrivedAt = status.to;
         // Half the per-flight wear of a revenue flight — no pax cycles.
-        plane.condition = Math.max(0, plane.condition - 0.0005);
+        // CEO decay perk applies here too.
+        const decayMult = getCEO(player.ceoId)?.perks.conditionDecayMult ?? 1.0;
+        plane.condition = Math.max(0, plane.condition - 0.0005 * decayMult);
         plane.status = { kind: 'idle', airportId: arrivedAt };
         lastLandedAt[plane.id] = now;
         if (!player.isAI) {
@@ -215,10 +292,11 @@ export function registerFlightHooks() {
     const threshold = state.settings.autoRepairThreshold;
     if (threshold <= 0) return;
     const me = state.human;
+    const repairMult = getCEO(me.ceoId)?.perks.repairCostMult ?? 1.0;
     for (const plane of me.planes) {
       if (plane.status.kind !== 'idle') continue;
       if (plane.condition >= threshold) continue;
-      const cost = Math.round((1 - plane.condition) * plane.model.price * 0.02);
+      const cost = Math.round((1 - plane.condition) * plane.model.price * 0.02 * repairMult);
       if (me.cash < cost) {
         state.pushNews(
           `${plane.name} below auto-repair threshold but funds short (need ${'$' + cost.toLocaleString('en-US')}).`,

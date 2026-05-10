@@ -42,6 +42,9 @@ export interface PlayerSnapshot {
   hubs?: string[];
   /** Apron gates per hub. Missing entries default to STARTING_GATES. */
   gateCounts?: Record<string, number>;
+  /** CEO id (see ceos.ts). Only the human typically has one; AI rivals
+   *  leave it unset. Optional for backwards-compat with pre-CEO saves. */
+  ceoId?: string;
 }
 
 export class Player {
@@ -81,6 +84,10 @@ export class Player {
    *  STARTING_GATES (8). Bought through Travel Agency → Airport tab. */
   gateCounts: Record<string, number> = {};
 
+  /** CEO id (see ceos.ts). Set at new-game time; perks are read live from
+   *  the catalog. AI rivals leave this undefined. */
+  ceoId?: string;
+
   /** Number of apron gates available at the given hub. */
   gatesAt(hubId: string): number {
     return this.gateCounts[hubId] ?? STARTING_GATES;
@@ -118,6 +125,7 @@ export class Player {
       inventory: { ...this.inventory },
       hubs: [...this.hubs],
       gateCounts: { ...this.gateCounts },
+      ceoId: this.ceoId,
     };
   }
 
@@ -139,6 +147,7 @@ export class Player {
     p.inventory = { ...(s.inventory ?? {}) };
     p.hubs = (s.hubs && s.hubs.length > 0) ? [...s.hubs] : [HOME_AIRPORT];
     p.gateCounts = { ...(s.gateCounts ?? {}) };
+    p.ceoId = s.ceoId;
     return p;
   }
 }

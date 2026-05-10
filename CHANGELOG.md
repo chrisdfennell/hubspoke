@@ -9,6 +9,80 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-10 — Takeoff animation holds for active landings
+
+With 3+ planes on 3+ routes, plane A's turnaround could expire while
+plane B was still on approach. Because the two animations are independent
+graphics-layer tweens, plane A would start its BOARDING bar / taxi-out
+sequence *during* plane B's landing animation — the player saw "a plane
+magically appears at a gate and starts boarding before the landing plane
+even shows up at its own gate."
+
+Fix ([AirportScene.ts](src/scenes/AirportScene.ts)):
+- New `activeLandingEndsAt: Map<planeId, realtimeMs>` published by
+  `animateLanding` on start and cleared in the final ARRIVED-bar
+  `onComplete`. Tracks the real-time end of every in-flight landing.
+- `animateTakeoff` queries it for the longest remaining landing and
+  delays Phase 0 (BOARDING) by that amount via `time.delayedCall`.
+  The plane icon sits at its gate during the hold — visually identical
+  to a parked plane — so the player just sees "queued for departure
+  while the inbound traffic clears."
+- Capped at `TAKEOFF_HOLD_CAP_MS = 4000` so sustained traffic at 4×
+  game-speed can't queue takeoffs indefinitely; animations are flavor,
+  not strict scheduling.
+
+Pairs with the earlier stable-gate work — each plane already had its
+own gate; this serializes the *visual* sequence too so a busy apron
+doesn't read as chaos.
+
+---
+
+## 2026-05-10 — CEO characters + mid-flight failures
+
+Two original-game systems wired together. CEOs make new runs feel
+distinct; mishaps make condition matter.
+
+**CEOs** ([ceos.ts](src/state/ceos.ts), [BootScene.ts](src/scenes/BootScene.ts))
+- Four CEOs in homage to the original roster: Mario Zucchero (The Charmer
+  — Duty Free 25% off, starting banana peels), Igor Tuppolevski (The
+  Engineer — Workshop repairs 50% off, planes wear 50% slower), Sven
+  Hassel (The Stoic — starts with 2× CCTV + 1× Cyber Shield to repel
+  saboteurs), Anita Mansion (The Tycoon — +$1M starting cash, loan APR
+  ×0.7).
+- New picker overlay shown after the difficulty card, before the run
+  actually starts (Back button returns to the difficulty picker so it's
+  not a one-way commit).
+- `GameState.reset(difficulty, ceoId)` and `bootstrap(ceoId)` apply
+  starting-cash + starting-inventory perks at the moment of bootstrap;
+  the live perks (repair discount, decay rate, duty-free multiplier,
+  loan APR) are read per-player from `getCEO(player.ceoId).perks` at
+  each call site.
+- `Bank.effectiveLoanApr` now takes an optional player so Anita's 0.7×
+  loan APR actually reduces her daily interest. HUDScene + BankScene
+  pass `me`.
+- Workshop repair-cost calc, auto-repair daily sweep, and per-flight
+  condition decay all read CEO perks live so flipping CEOs (via save
+  edit or new run) takes effect instantly.
+- Airline-name HUD tooltip now shows the CEO's name, epithet, and
+  perk blurb so you don't forget who you're playing as.
+
+**Mid-flight failures** ([Flights.ts](src/systems/Flights.ts))
+- Revenue flights now roll `maybeMishap` on landing. Above 50%
+  condition: nothing. Below 50%: linear ramp from 0% chance at 0.5
+  condition to 20% at 0%. Below 15%: 30% of incidents are full crashes.
+- **Incident**: plane forced to 50% condition via emergency repair
+  (charged $0 — the patch is just so the plane is flyable), reputation
+  −5, $2k/passenger compensation, news headline.
+- **Crash**: plane removed from the fleet outright, reputation −25,
+  $10k/passenger compensation, news headline tagged with `★`.
+- AI rivals can also crash — keeps the competitive landscape honest if
+  they neglect their fleet — but only the human gets news headlines.
+- Pairs naturally with the auto-repair Settings toggle: a player who
+  doesn't want this consequence loop can flip auto-repair to 50% and
+  never see a mishap.
+
+---
+
 ## 2026-05-10 — Five new Settings panel options
 
 Settings ([SettingsScene.ts](src/scenes/rooms/SettingsScene.ts)) gained two

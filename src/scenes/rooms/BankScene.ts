@@ -25,7 +25,7 @@ export class BankScene extends RoomScene {
     y += 28;
     this.addText(left, y, `Outstanding loan: ${formatMoney(me.loan)}`, 14);
     y += 22;
-    this.addText(left, y, `Credit limit: ${formatMoney(creditLimit(me))}    APR: ${(effectiveLoanApr() * 100).toFixed(1)}%`, 13, COLORS.textDim);
+    this.addText(left, y, `Credit limit: ${formatMoney(creditLimit(me))}    APR: ${(effectiveLoanApr(me) * 100).toFixed(1)}%`, 13, COLORS.textDim);
     y += 30;
 
     this.addText(left, y, 'Borrow:', 13, COLORS.textDim);

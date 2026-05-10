@@ -10,6 +10,7 @@ import { portfolioValue } from '../systems/Stocks';
 import { DIFFICULTIES } from '../state/Difficulty';
 import { netWorth, BILLIONAIRE_VICTORY, MILESTONES, Milestone } from '../systems/Milestones';
 import { Modal } from '../ui/Modal';
+import { getCEO } from '../state/ceos';
 
 export class HUDScene extends Phaser.Scene {
   private dateText!: Phaser.GameObjects.Text;
@@ -64,9 +65,19 @@ export class HUDScene extends Phaser.Scene {
     this.tooltip.attach(this.moneyText, () => this.moneyTooltip());
     this.tooltip.attach(this.fleetText, () => this.fleetTooltip());
     this.tooltip.attach(this.airlineText, () => {
-      const d = GameState.get().difficulty;
-      const cfg = DIFFICULTIES[d];
-      return `Difficulty: ${cfg.label}\n${cfg.tagline}`;
+      const s = GameState.get();
+      const cfg = DIFFICULTIES[s.difficulty];
+      const ceo = getCEO(s.human.ceoId);
+      const lines: string[] = [
+        `Difficulty: ${cfg.label}`,
+        cfg.tagline,
+      ];
+      if (ceo) {
+        lines.push('');
+        lines.push(`CEO: ${ceo.glyph} ${ceo.name} — ${ceo.epithet}`);
+        lines.push(ceo.perkBlurb);
+      }
+      return lines.join('\n');
     });
 
     // Speed indicator + system buttons. Speed text right-aligns so it tucks
@@ -365,7 +376,7 @@ export class HUDScene extends Phaser.Scene {
   /** Money breakdown: cash, savings, loan, daily interest, portfolio, net worth. */
   private moneyTooltip(): string {
     const me = GameState.get().human;
-    const dailyLoanInterest = me.loan * (effectiveLoanApr() / 360);
+    const dailyLoanInterest = me.loan * (effectiveLoanApr(me) / 360);
     const dailySavingsYield = me.savings * (SAVINGS_APY / 360);
     const portfolio = portfolioValue(me);
     const netWorth = me.cash + me.savings + portfolio - me.loan;

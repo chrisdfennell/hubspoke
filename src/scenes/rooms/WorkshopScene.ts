@@ -8,6 +8,7 @@ import { PLANE_MODELS, PlaneModel, getCity } from '../../state/catalog';
 import { Plane } from '../../state/Plane';
 import { getFuelPrice } from '../../systems/Economy';
 import { sound } from '../../systems/Sound';
+import { getCEO } from '../../state/ceos';
 
 export class WorkshopScene extends RoomScene {
   constructor() { super('WorkshopScene'); this.title = 'Workshop — Buy Planes'; }
@@ -88,8 +89,10 @@ export class WorkshopScene extends RoomScene {
 
       // 2% of plane price per condition point — a brand-new plane down to 50%
       // condition costs ~1% of the plane's price to fully restore, on top of
-      // amortized daily maintenance.
-      const repairCost = Math.round((1 - plane.condition) * plane.model.price * 0.02);
+      // amortized daily maintenance. Igor's CEO perk halves this.
+      const ceo = getCEO(me.ceoId);
+      const repairMult = ceo?.perks.repairCostMult ?? 1.0;
+      const repairCost = Math.round((1 - plane.condition) * plane.model.price * 0.02 * repairMult);
       const needsWork = plane.condition < 0.99;
       const canPay = me.cash >= repairCost;
       const repairBtn = new Button({

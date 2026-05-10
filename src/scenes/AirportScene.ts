@@ -80,6 +80,15 @@ export class AirportScene extends Phaser.Scene {
   /** Signature of the last drawn parked layer (id+gate tuples). Skips
    *  rebuild when nothing changed. */
   private parkedSig = '';
+  /** Real-time (scene.time.now) at which each in-flight landing animation
+   *  ends, keyed by plane id. animateTakeoff queries this to delay its
+   *  BOARDING phase so the player doesn't see a plane begin boarding while
+   *  a sibling plane is still taxiing in. */
+  private activeLandingEndsAt = new Map<string, number>();
+  /** Cap on how long a takeoff can wait for landings to finish. Without
+   *  this, sustained 3-plane traffic at 4× speed produces a perpetually
+   *  growing animation backlog. 4s = roughly one full takeoff cycle. */
+  private readonly TAKEOFF_HOLD_CAP_MS = 4000;
 
   constructor() { super('AirportScene'); }
 
@@ -550,40 +559,57 @@ export class AirportScene extends Phaser.Scene {
     const thresholdX = exitsRight ? this.RUNWAY_LEFT + 50 : this.RUNWAY_RIGHT - 50;
     const exitX = exitsRight ? GAME_WIDTH + 80 : -80;
 
-    // Phase 0: BOARDING. Plane sits at gate while a small bar above it fills,
-    // selling the "passengers loading" beat before taxi starts.
-    const boarding = this.boardingProgress(gateX, this.apronY - 24, '#ffc857', 'BOARDING');
-    this.tweens.add({
-      targets: boarding.fill,
-      scaleX: 1,
-      duration: 800,
-      ease: 'Linear',
-      onComplete: () => {
-        boarding.destroy();
-        this.flashLabel(gateX, this.apronY - 36, 'TAKEOFF', '#ffc857');
+    // If any sibling plane is still mid-LANDING animation, hold this
+    // takeoff until they're parked. Otherwise the player sees a plane
+    // start boarding/taxiing out while another plane is still on
+    // approach, which reads as "plane magically appears at gate while
+    // another one is coming in." The icon stays at the gate during the
+    // hold (visually indistinguishable from a parked plane).
+    const now = this.time.now;
+    let holdMs = 0;
+    for (const endsAt of this.activeLandingEndsAt.values()) {
+      holdMs = Math.max(holdMs, endsAt - now);
+    }
+    // Cap so sustained traffic at 4× game-speed can't queue takeoffs
+    // forever — animations are flavor, not a strict serialization.
+    holdMs = Math.max(0, Math.min(holdMs, this.TAKEOFF_HOLD_CAP_MS));
 
-        // Phase 1: taxi from gate to the runway threshold.
-        this.tweens.add({
-          targets: icon,
-          x: thresholdX,
-          y: this.runwayY,
-          duration: 1000,
-          ease: 'Sine.easeInOut',
-          onComplete: () => {
-            // Phase 2: accelerate down the runway and exit.
-            this.tweens.add({
-              targets: icon,
-              x: exitX,
-              duration: 1200,
-              ease: 'Cubic.easeIn',
-              onComplete: () => {
-                icon.destroy();
-                this.animatingIds.delete(plane.id);
-              },
-            });
-          },
-        });
-      },
+    this.time.delayedCall(holdMs, () => {
+      // Phase 0: BOARDING. Plane sits at gate while a small bar above it fills,
+      // selling the "passengers loading" beat before taxi starts.
+      const boarding = this.boardingProgress(gateX, this.apronY - 24, '#ffc857', 'BOARDING');
+      this.tweens.add({
+        targets: boarding.fill,
+        scaleX: 1,
+        duration: 800,
+        ease: 'Linear',
+        onComplete: () => {
+          boarding.destroy();
+          this.flashLabel(gateX, this.apronY - 36, 'TAKEOFF', '#ffc857');
+
+          // Phase 1: taxi from gate to the runway threshold.
+          this.tweens.add({
+            targets: icon,
+            x: thresholdX,
+            y: this.runwayY,
+            duration: 1000,
+            ease: 'Sine.easeInOut',
+            onComplete: () => {
+              // Phase 2: accelerate down the runway and exit.
+              this.tweens.add({
+                targets: icon,
+                x: exitX,
+                duration: 1200,
+                ease: 'Cubic.easeIn',
+                onComplete: () => {
+                  icon.destroy();
+                  this.animatingIds.delete(plane.id);
+                },
+              });
+            },
+          });
+        },
+      });
     });
   }
 
@@ -596,6 +622,10 @@ export class AirportScene extends Phaser.Scene {
     const entersFromRight = (gateIdx % 2) === 0;
 
     this.animatingIds.add(plane.id);
+    // Publish the expected end-of-landing time so any pending takeoff
+    // animations can hold their BOARDING phase until we're parked.
+    // 1200 (approach) + 1000 (taxi) + 600 (deplane) = 2800 ms.
+    this.activeLandingEndsAt.set(plane.id, this.time.now + 2800);
     const startX = entersFromRight ? GAME_WIDTH + 80 : -80;
     const flightRot = entersFromRight ? Math.PI : 0;
     const icon = this.makePlaneIcon(startX, this.runwayY, seats, me.color, flightRot);
@@ -637,6 +667,7 @@ export class AirportScene extends Phaser.Scene {
                 deplane.destroy();
                 icon.destroy();
                 this.animatingIds.delete(plane.id);
+                this.activeLandingEndsAt.delete(plane.id);
               },
             });
           },

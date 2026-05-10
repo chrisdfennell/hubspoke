@@ -2,6 +2,7 @@ import { GameState } from '../state/GameState';
 import { Player } from '../state/Player';
 import { getPlaneModel } from '../state/catalog';
 import { getDifficulty } from '../state/Difficulty';
+import { getCEO } from '../state/ceos';
 import { clock } from './Clock';
 
 /** Baseline annual loan interest rate (0.18 = 18%). Difficulty-scaled. */
@@ -9,9 +10,15 @@ export const LOAN_APR = 0.18;
 /** Annual savings yield. Paid daily. */
 export const SAVINGS_APY = 0.04;
 
-/** Effective loan APR for the current run (after difficulty multiplier). */
-export function effectiveLoanApr(): number {
-  return LOAN_APR * getDifficulty(GameState.get().difficulty).loanAprMult;
+/** Effective loan APR for the current run (after difficulty multiplier).
+ *  Pass a player to also apply their CEO's loan-rate perk (Anita ×0.7).
+ *  When called without a player it returns the un-personalized rate, which
+ *  is what most read-only displays want. */
+export function effectiveLoanApr(player?: Player): number {
+  let apr = LOAN_APR * getDifficulty(GameState.get().difficulty).loanAprMult;
+  const ceo = getCEO(player?.ceoId);
+  if (ceo?.perks.loanAprMult) apr *= ceo.perks.loanAprMult;
+  return apr;
 }
 
 /** A player's max loan = fleet value × 0.6 + $5M baseline. */
@@ -58,13 +65,14 @@ export function withdraw(p: Player, amount: number): boolean {
   return true;
 }
 
-/** Daily interest tick — replaces the simpler one in Economy. */
+/** Daily interest tick — replaces the simpler one in Economy. APR is read
+ *  per-player so CEO perks (Anita's 0.7× loan APR) actually save the human
+ *  money on daily interest. */
 export function applyDailyInterest() {
   const state = GameState.get();
-  const apr = effectiveLoanApr();
   for (const p of state.players) {
     if (p.loan > 0) {
-      const interest = p.loan * (apr / 360);
+      const interest = p.loan * (effectiveLoanApr(p) / 360);
       p.cash -= interest;
     }
     if (p.savings > 0) {

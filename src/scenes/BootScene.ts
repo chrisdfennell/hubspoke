@@ -19,6 +19,7 @@ import {
 import { Button } from '../ui/Button';
 import { formatMoney } from '../systems/Clock';
 import { Difficulty, DIFFICULTIES } from '../state/Difficulty';
+import { CEOS } from '../state/ceos';
 
 export class BootScene extends Phaser.Scene {
   constructor() { super('BootScene'); }
@@ -177,8 +178,8 @@ export class BootScene extends Phaser.Scene {
     this.go();
   }
 
-  private startNewGame(id: number, difficulty: Difficulty) {
-    GameState.reset(difficulty);
+  private startNewGame(id: number, difficulty: Difficulty, ceoId: string) {
+    GameState.reset(difficulty, ceoId);
     setActiveSlot(id);
     this.go();
   }
@@ -211,7 +212,7 @@ export class BootScene extends Phaser.Scene {
       card.on('pointerout',  () => card.setFillStyle(0x1a3450));
       card.on('pointerdown', () => {
         overlay.destroy(true);
-        this.startNewGame(slotId, d);
+        this.openCEOPicker(slotId, d);
       });
       overlay.add(card);
 
@@ -241,6 +242,99 @@ export class BootScene extends Phaser.Scene {
       width: 120, height: 32,
       label: 'Cancel',
       onClick: () => overlay.destroy(true),
+    });
+    overlay.add(cancelBtn);
+  }
+
+  /** Modal-ish overlay listing CEOs. Shown right after the difficulty pick,
+   *  before the new game actually starts. Each card is one CEO with their
+   *  perk blurb; clicking commits the run. */
+  private openCEOPicker(slotId: number, difficulty: Difficulty) {
+    const overlay = this.add.container(0, 0).setDepth(50);
+    overlay.add(this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.7)
+      .setOrigin(0).setInteractive());
+    overlay.add(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 760, 540, COLORS.panel)
+      .setStrokeStyle(2, COLORS.panelBorder));
+    overlay.add(this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 235, 'Choose Your CEO', {
+      fontFamily: 'Segoe UI, Tahoma, sans-serif',
+      fontSize: '22px',
+      color: COLORS.accentText,
+      fontStyle: 'bold',
+    }).setOrigin(0.5));
+    overlay.add(this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 205,
+      `Difficulty: ${DIFFICULTIES[difficulty].label} — pick the person running the airline.`,
+      {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '12px',
+        color: COLORS.textDim,
+      }).setOrigin(0.5));
+
+    const cardW = 700;
+    const cardH = 92;
+    const startY = GAME_HEIGHT / 2 - 160;
+    CEOS.forEach((ceo, i) => {
+      const cy = startY + i * (cardH + 8);
+      const card = this.add.rectangle(GAME_WIDTH / 2, cy, cardW, cardH, 0x1a3450)
+        .setStrokeStyle(2, ceo.color);
+      card.setInteractive({ useHandCursor: true });
+      card.on('pointerover', () => card.setFillStyle(0x2a5780));
+      card.on('pointerout',  () => card.setFillStyle(0x1a3450));
+      card.on('pointerdown', () => {
+        overlay.destroy(true);
+        this.startNewGame(slotId, difficulty, ceo.id);
+      });
+      overlay.add(card);
+
+      // Glyph "portrait" on the left of the card.
+      overlay.add(this.add.text(
+        GAME_WIDTH / 2 - cardW / 2 + 36, cy, ceo.glyph,
+        {
+          fontFamily: 'Segoe UI Emoji, Apple Color Emoji, Segoe UI Symbol, Segoe UI, sans-serif',
+          fontSize: '40px',
+        },
+      ).setOrigin(0.5));
+
+      // Name + epithet line.
+      overlay.add(this.add.text(
+        GAME_WIDTH / 2 - cardW / 2 + 80, cy - 28, `${ceo.name}  —  ${ceo.epithet}`,
+        {
+          fontFamily: 'Segoe UI, Tahoma, sans-serif',
+          fontSize: '17px',
+          color: COLORS.accentText,
+          fontStyle: 'bold',
+        },
+      ).setOrigin(0, 0));
+      // Tagline.
+      overlay.add(this.add.text(
+        GAME_WIDTH / 2 - cardW / 2 + 80, cy - 6, ceo.tagline,
+        {
+          fontFamily: 'Segoe UI, Tahoma, sans-serif',
+          fontSize: '12px',
+          color: COLORS.text,
+          fontStyle: 'italic',
+        },
+      ).setOrigin(0, 0));
+      // Perk blurb.
+      overlay.add(this.add.text(
+        GAME_WIDTH / 2 - cardW / 2 + 80, cy + 18, ceo.perkBlurb,
+        {
+          fontFamily: 'Segoe UI, Tahoma, sans-serif',
+          fontSize: '12px',
+          color: COLORS.textDim,
+        },
+      ).setOrigin(0, 0));
+    });
+
+    const cancelBtn = new Button({
+      scene: this,
+      x: GAME_WIDTH / 2,
+      y: GAME_HEIGHT / 2 + 235,
+      width: 120, height: 32,
+      label: 'Back',
+      onClick: () => {
+        overlay.destroy(true);
+        this.openDifficultyPicker(slotId);
+      },
     });
     overlay.add(cancelBtn);
   }
