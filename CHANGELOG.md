@@ -9,6 +9,30 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-10 — Apron liveliness: staggered dispatch + in-transit strip
+
+**Stagger** ([Flights.ts](src/systems/Flights.ts))
+- A fleet of N planes that all become idle on the same tick used to leap
+  off the apron together, leaving the airport looking empty mid-cycle.
+  Now each player has a per-game-minute cooldown between dispatches —
+  default 5 game-minutes (≈ 1s real-time at 1×). One plane lifts off,
+  the next one waits ~1s, and so on.
+- Module-scope `lastDispatchAt: Record<playerId, gameMin>`. Not persisted;
+  resetting on page reload is harmless.
+
+**In-transit strip** ([AirportScene.ts](src/scenes/AirportScene.ts))
+- New `transitLayer` container under the apron showing one tag per flight
+  currently outbound (`→ Maui`, gold) or inbound (`← Maui`, green) to the
+  active hub. Sig-cached so it only rebuilds when the set of destinations
+  changes, not every frame.
+- Lives at `apronY + 45`, between the gate stalls and the runway, so it
+  doesn't compete with takeoff/landing animations.
+
+Together: takeoffs no longer arrive in bursts, and even when every plane
+happens to be mid-flight the apron tells you what's coming back.
+
+---
+
 ## 2026-05-10 — Bugfix: Close + ESC dead in any re-entered room
 
 **The bug**: after entering and closing any room (Travel Agency, Workshop,

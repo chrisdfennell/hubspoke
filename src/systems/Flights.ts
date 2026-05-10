@@ -13,6 +13,15 @@ function dateToMinutes(d: GameDate): number {
   return ((((d.year * 12 + (d.month - 1)) * 30 + (d.day - 1)) * 24 + d.hour) * 60) + d.minute;
 }
 
+/** Per-player game-minute timestamp of the last successful dispatch.
+ *  Used to stagger takeoffs so a fleet of N planes doesn't all leap off the
+ *  apron in the same tick — without this the airport reads as bursty (all
+ *  planes mid-flight together, then all idle together). 5 game-min ≈ 1s
+ *  real-time at 1× speed. Module-scope is fine: cooldown resetting on a
+ *  page reload is harmless. */
+const lastDispatchAt: Record<string, number> = {};
+const DISPATCH_STAGGER_MINUTES = 5;
+
 /** Try to dispatch idle planes that have a route assigned. */
 export function dispatchIdlePlanes() {
   // Lazy one-shot: if a legacy save predates the latest balance pass, fix it
@@ -25,6 +34,10 @@ export function dispatchIdlePlanes() {
   const settings = state.settings;
 
   for (const player of state.players) {
+    // Stagger: skip this player entirely if they dispatched too recently.
+    const lastT = lastDispatchAt[player.id] ?? -Infinity;
+    if (now - lastT < DISPATCH_STAGGER_MINUTES) continue;
+
     // Crew constraint: only the first N planes (by index) get to fly when
     // understaffed. This keeps behavior deterministic so the player can
     // reorganize routes meaningfully in the Personnel room.
@@ -73,6 +86,13 @@ export function dispatchIdlePlanes() {
         arrivesAt: now + minutes,
       };
       if (!player.isAI) sound.play('takeoff');
+
+      // Stagger: only one plane per player per stagger window. Marker is set
+      // here, after a successful state mutation, so a player whose only idle
+      // plane was filtered out (wrong hub, threshold gate, etc.) doesn't get
+      // unfairly cooldowned.
+      lastDispatchAt[player.id] = now;
+      break;
     }
   }
 }

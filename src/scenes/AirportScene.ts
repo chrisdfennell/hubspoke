@@ -49,6 +49,10 @@ export class AirportScene extends Phaser.Scene {
 
   private parkedLayer!: Phaser.GameObjects.Container;
   private flightLayer!: Phaser.GameObjects.Container;
+  /** Strip below the apron showing one tag per flight currently outbound or
+   *  inbound for the active hub — fills the visual gap between bursts. */
+  private transitLayer!: Phaser.GameObjects.Container;
+  private transitSig = '';
   private tooltip!: Tooltip;
   /** Title strip — updated when activeHub changes so the airport reflects
    *  whichever hub the player is currently focused on. */
@@ -94,9 +98,11 @@ export class AirportScene extends Phaser.Scene {
     // Apron + runway visual.
     this.drawApronAndRunway();
 
-    // Layers for plane sprites (parked & flight animations).
+    // Layers for plane sprites (parked & flight animations) + in-transit
+    // tag strip that lives below the apron.
     this.parkedLayer = this.add.container(0, 0);
     this.flightLayer = this.add.container(0, 0);
+    this.transitLayer = this.add.container(0, 0);
 
     // Tooltip used for live room state on hover.
     this.tooltip = new Tooltip(this);
@@ -122,7 +128,58 @@ export class AirportScene extends Phaser.Scene {
   update() {
     this.checkStatusChanges();
     this.drawParkedPlanes();
+    this.drawInTransit();
     this.refreshTitleIfHubChanged();
+  }
+
+  /**
+   * Strip below the apron listing every flight currently outbound from or
+   * inbound to the active hub. Fills the "all my planes are mid-flight, the
+   * apron looks dead" gap by giving the player something to read while they
+   * wait for the next landing animation. Sig-cached so it only rebuilds when
+   * the set of in-transit destinations changes.
+   */
+  private drawInTransit() {
+    const state = GameState.get();
+    const me = state.human;
+    const hub = state.activeHub;
+
+    const flights: Array<{ direction: '→' | '←'; otherCity: string }> = [];
+    for (const plane of me.planes) {
+      const s = plane.status;
+      if (s.kind === 'flying' || s.kind === 'cargo' || s.kind === 'ferry') {
+        if (s.from === hub) flights.push({ direction: '→', otherCity: s.to });
+        else if (s.to === hub) flights.push({ direction: '←', otherCity: s.from });
+      }
+    }
+
+    const sig = flights.map(f => `${f.direction}${f.otherCity}`).join('|');
+    if (sig === this.transitSig) return;
+    this.transitSig = sig;
+
+    this.transitLayer.removeAll(true);
+    if (flights.length === 0) return;
+
+    const stripY = this.apronY + 45;
+    const header = this.add.text(80, stripY, 'IN TRANSIT', {
+      fontFamily: 'Segoe UI, Tahoma, sans-serif',
+      fontSize: '10px',
+      color: '#9bb0c4',
+      fontStyle: 'bold',
+    });
+    this.transitLayer.add(header);
+
+    let x = 170;
+    for (const f of flights) {
+      const cityName = getCity(f.otherCity).name;
+      const tag = this.add.text(x, stripY, `${f.direction} ${cityName}`, {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '11px',
+        color: f.direction === '→' ? '#ffc857' : '#7be08a',
+      });
+      this.transitLayer.add(tag);
+      x += tag.width + 18;
+    }
   }
 
   /** Build the title strip label for the current active hub. */
