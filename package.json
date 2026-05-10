@@ -1,0 +1,19 @@
+{
+  "name": "hub-and-spoke",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Hub & Spoke — a web-based airline tycoon. Build hubs, fly routes, dominate the skies.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11"
+  }
+}
