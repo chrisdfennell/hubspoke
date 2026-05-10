@@ -1,6 +1,23 @@
 import { Plane, PlaneSnapshot } from './Plane';
 import { Route, RouteSnapshot } from './Route';
-import { HOME_AIRPORT } from './catalog';
+import { CityData, HOME_AIRPORT } from './catalog';
+
+/** Default apron gates per hub before any expansions are bought. */
+export const STARTING_GATES = 8;
+/** Hard cap: an apron fits this many evenly-spaced gates in one row. Bumping
+ *  this means revisiting AirportScene's gate-box geometry (gates would either
+ *  shrink below the 56-px box width or wrap to a second row). */
+export const MAX_GATES_PER_HUB = 12;
+
+/** Cost in $ to add the (currentGates + 1)-th gate to a hub. Escalates per
+ *  gate and scales with hub demand so big-market hubs cost more. Gate 9 at a
+ *  ×1.0 hub = $2M; gate 12 at the same hub = $5M. Returns Infinity if the
+ *  hub is already at the cap. */
+export function gateExpansionCost(currentGates: number, hub: CityData): number {
+  if (currentGates >= MAX_GATES_PER_HUB) return Infinity;
+  // (currentGates - 6) gives 2, 3, 4, 5 for the 9th..12th gate.
+  return Math.round((currentGates - 6) * 1_000_000 * hub.demand);
+}
 
 export interface PlayerSnapshot {
   id: string;
@@ -23,6 +40,8 @@ export interface PlayerSnapshot {
   /** City ids the airline operates out of. First entry is the primary home.
    *  Optional for backwards compat — pre-multi-hub saves get [HOME_AIRPORT]. */
   hubs?: string[];
+  /** Apron gates per hub. Missing entries default to STARTING_GATES. */
+  gateCounts?: Record<string, number>;
 }
 
 export class Player {
@@ -58,6 +77,15 @@ export class Player {
    *  — the one the AirportScene renders by default. */
   hubs: string[] = [HOME_AIRPORT];
 
+  /** Apron gates owned at each hub. Entries that aren't present default to
+   *  STARTING_GATES (8). Bought through Travel Agency → Airport tab. */
+  gateCounts: Record<string, number> = {};
+
+  /** Number of apron gates available at the given hub. */
+  gatesAt(hubId: string): number {
+    return this.gateCounts[hubId] ?? STARTING_GATES;
+  }
+
   constructor(id: string, name: string, color: number, isAI: boolean, startCash: number, homeHub: string = HOME_AIRPORT) {
     this.id = id;
     this.name = name;
@@ -89,6 +117,7 @@ export class Player {
       holdings: { ...this.holdings },
       inventory: { ...this.inventory },
       hubs: [...this.hubs],
+      gateCounts: { ...this.gateCounts },
     };
   }
 
@@ -109,6 +138,7 @@ export class Player {
     p.holdings = { ...(s.holdings ?? {}) };
     p.inventory = { ...(s.inventory ?? {}) };
     p.hubs = (s.hubs && s.hubs.length > 0) ? [...s.hubs] : [HOME_AIRPORT];
+    p.gateCounts = { ...(s.gateCounts ?? {}) };
     return p;
   }
 }

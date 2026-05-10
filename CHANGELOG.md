@@ -9,6 +9,124 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-10 — Buyable gate expansions (8 → 12 per hub)
+
+Hubs used to expose a fixed 8 gates and silently wrap with modulo once you
+had more planes than gates. Now apron capacity is part of the airline's
+upgrade tree.
+
+**State** ([Player.ts](src/state/Player.ts))
+- `gateCounts: Record<hubId, number>` on Player (defaults to 8 via
+  `gatesAt(hubId)` getter when an entry is missing). Persists in the save.
+- `STARTING_GATES = 8`, `MAX_GATES_PER_HUB = 12`, plus `gateExpansionCost`
+  helper: `(currentGates - 6) × $1M × hub.demand`. So at HNL (×1.0): gate
+  9 = $2M, gate 10 = $3M, gate 11 = $4M, gate 12 = $5M. At LAX (×1.3): the
+  same gates cost $2.6M / $3.9M / $5.2M / $6.5M. Big hubs cost more.
+
+**UI** ([TravelAgencyScene.ts](src/scenes/rooms/TravelAgencyScene.ts))
+- New "Airport" tab beside "Routes". Hub picker is shared across tabs.
+- Airport tab shows current `gates / MAX` for the active hub, a "Buy +1
+  gate" button (greyed when broke), and a preview of remaining gate costs
+  so the player can plan the spend.
+- `currentTab` is reset in `create()` to land you on Routes each entry —
+  Phaser reuses the scene instance, so without the reset a previous Airport
+  visit would persist across room reopens.
+
+**Apron rendering** ([AirportScene.ts](src/scenes/AirportScene.ts))
+- `gateXs` is now dynamic: `ensureGateLayout()` recomputes the array
+  (evenly spaced between x=120 and x=1100) and redraws the gate boxes into
+  a dedicated `gateBoxLayer` whenever the active hub or its gate count
+  changes. 8 gates recover the original 140-px spacing; 12 gates tighten
+  to ~89 px between centers, still fitting the same apron strip.
+- Hub-change clears `gateByPlaneId` (gate assignments don't carry across
+  hubs — different gate count, different spacing).
+
+---
+
+## 2026-05-10 — Stable per-plane gate assignment
+
+A plane that landed at gate 3 used to visually hop to gate 1 the instant an
+earlier gate became free — the gate index was computed each frame as
+`idleListIndex % gateCount`, so removing any plane from the filtered list
+shifted everyone behind it. Player saw: plane taxis to gate 3, deplanes,
+then teleports to gate 1 for boarding before takeoff.
+
+Fix ([AirportScene.ts](src/scenes/AirportScene.ts)):
+`drawParkedPlanes` now treats `gateByPlaneId` as authoritative state
+instead of rebuilding it from scratch. Each plane keeps its gate from
+landing through boarding through takeoff. Gates are released only when a
+plane is no longer at the apron AND no longer mid-animation, so the
+landing icon, the parked beat, the boarding bar, and the takeoff icon all
+share the same gate. `gateIndexFor()` assigns lazily on first call (lowest
+free gate), so a fresh arrival picks an unoccupied slot and stays there.
+
+---
+
+## 2026-05-10 — Crew shortage warning: modal alert + tighter inline label
+
+The full "⚠ N grounded — hire crew in Personnel" warning in the top HUD bar
+was overflowing into the centered date strip, leaving both unreadable when
+they overlapped ([HUDScene.ts](src/scenes/HUDScene.ts)).
+
+Two changes:
+- Inline label now reads `⚠ N grounded` — short enough to fit beside the
+  fleet/routes/rep block without colliding with the date. Full instruction
+  is still in the fleet-text hover tooltip.
+- Added a one-shot `Modal.alert` ("Crew Shortage" + "Got it" button) that
+  fires on the rising edge — when the shortfall transitions 0→positive or
+  grows. `lastShortfallAlerted` tracks the last value we showed, so the
+  modal doesn't reappear every frame the issue persists. Resolving the
+  shortfall (hiring enough crew) resets it so a future shortage alerts
+  again.
+
+---
+
+## 2026-05-10 — Bugfix: takeoff/landing animations silently swallowed
+
+Two bugs sat on top of each other. Both caused the Maui (and every) route
+to play sounds without ever showing a plane animation on the apron.
+
+**Bug 1: RESUME snapshot erased the transition edge**
+([AirportScene.ts](src/scenes/AirportScene.ts))
+
+`snapshotStatuses()` was being re-run on every RESUME / WAKE event. The
+clock lives in the HUDScene and keeps ticking while the airport is paused,
+so `dispatchIdlePlanes` flips the plane idle→flying *during* the Travel
+Agency visit. The takeoff sound fires from the dispatch system itself, but
+the animation hook lives in `checkStatusChanges` (gated by a prev→cur edge
+in `lastStatuses`). The RESUME snapshot overwrote `lastStatuses[plane]`
+with the current `'flying'` value, so the next frame saw prev=cur=`'flying'`
+and skipped the animation entirely.
+
+Fix: keep the one-shot snapshot in `create()` (still useful for seeding new
+planes the first frame), but drop the RESUME / WAKE handlers. First
+post-resume frame now sees prev=`'idle'` / cur=`'flying'` and fires
+`animateTakeoff` normally.
+
+**Bug 2: same-tick land + redispatch hid the idle state**
+([Flights.ts](src/systems/Flights.ts))
+
+Even with Bug 1 fixed, a fully-cycling plane *still* never animated.
+`registerFlightHooks()` runs `landArrivedPlanes()` and `dispatchIdlePlanes()`
+back-to-back inside a single `clock.onTick` callback. The instant a plane
+lands, the very next call in the same tick redispatches it. Inside one
+synchronous JS callback, the status goes `flying → idle → flying` without
+yielding a single Phaser frame. AirportScene's per-frame poller never sees
+the `'idle'` value, so both the landing animation AND the boarding/takeoff
+beat that follows it get silently skipped. The console heartbeat I added
+to debug this confirmed it: the plane oscillated between
+`flying hnl->ogg` and `flying ogg->hnl` with `last=flying` every time —
+zero observed idle frames across thousands of ticks.
+
+Fix: per-plane `lastLandedAt` cooldown of 15 game-minutes (≈3s real-time
+at 1×) before a plane can be redispatched. That's enough headroom for the
+2.8s landing animation to play out plus a brief parked beat at the gate
+before the boarding bar fills. Module-scope state, not persisted — a
+post-reload plane can dispatch on its first tick, which is the right
+behavior (it's been idle "off-screen" for arbitrarily long).
+
+---
+
 ## 2026-05-10 — Apron liveliness: staggered dispatch + in-transit strip
 
 **Stagger** ([Flights.ts](src/systems/Flights.ts))

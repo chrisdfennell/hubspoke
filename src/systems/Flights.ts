@@ -22,6 +22,17 @@ function dateToMinutes(d: GameDate): number {
 const lastDispatchAt: Record<string, number> = {};
 const DISPATCH_STAGGER_MINUTES = 5;
 
+/** Per-plane game-minute timestamp of the last landing. Used to enforce a
+ *  minimum turnaround so a plane that just landed doesn't get redispatched
+ *  in the same clock tick — landArrivedPlanes and dispatchIdlePlanes share
+ *  an onTick callback, so without this gate the plane goes idle→flying in
+ *  a single tick and AirportScene's checkStatusChanges() (which polls per
+ *  frame) never observes the idle state, suppressing the landing AND the
+ *  follow-up takeoff animation. 15 game-min ≈ 3s real-time at 1×, enough
+ *  for the 2.8s landing animation to play plus a brief parked beat. */
+const lastLandedAt: Record<string, number> = {};
+const MIN_TURNAROUND_MINUTES = 15;
+
 /** Try to dispatch idle planes that have a route assigned. */
 export function dispatchIdlePlanes() {
   // Lazy one-shot: if a legacy save predates the latest balance pass, fix it
@@ -52,6 +63,14 @@ export function dispatchIdlePlanes() {
       const status = plane.status;
       if (status.kind !== 'idle' || !plane.routeId) continue;
       if (inAir + dispatched >= staffCap) break;
+
+      // Turnaround gate: don't redispatch a plane that landed in the same
+      // tick (or only a couple of ticks ago). Gives the per-frame
+      // AirportScene poller time to observe the idle state and animate the
+      // landing + boarding/takeoff beats. See comment on lastLandedAt above.
+      const landedT = lastLandedAt[plane.id];
+      if (landedT !== undefined && now - landedT < MIN_TURNAROUND_MINUTES) continue;
+
       const route = player.routes.find(r => r.id === plane.routeId);
       if (!route) continue;
 
@@ -111,6 +130,7 @@ export function landArrivedPlanes() {
         const arrivedAt = status.to;
         if (!route) {
           plane.status = { kind: 'idle', airportId: arrivedAt };
+          lastLandedAt[plane.id] = now;
           continue;
         }
         const result = flightProfit(plane, route);
@@ -120,6 +140,7 @@ export function landArrivedPlanes() {
         // month of heavy use before needing a serious overhaul.
         plane.condition = Math.max(0, plane.condition - 0.001);
         plane.status = { kind: 'idle', airportId: arrivedAt };
+        lastLandedAt[plane.id] = now;
         if (!player.isAI) {
           const sign = result.profit >= 0 ? '+' : '';
           state.pushNews(
@@ -133,6 +154,7 @@ export function landArrivedPlanes() {
         // Half the per-flight wear of a revenue flight — no pax cycles.
         plane.condition = Math.max(0, plane.condition - 0.0005);
         plane.status = { kind: 'idle', airportId: arrivedAt };
+        lastLandedAt[plane.id] = now;
         if (!player.isAI) {
           state.pushNews(`${plane.name} repositioned to ${getCity(arrivedAt).name}.`);
           sound.play('land');

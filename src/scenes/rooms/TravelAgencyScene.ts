@@ -8,17 +8,30 @@ import { suggestedTicketPrice, expectedLoadFactor, flightProfit, competingRoutes
 import { getDemandMult } from '../../state/demandModifiers';
 import { Route } from '../../state/Route';
 import { sound } from '../../systems/Sound';
+import {
+  gateExpansionCost, MAX_GATES_PER_HUB, STARTING_GATES,
+} from '../../state/Player';
+
+type Tab = 'routes' | 'airport';
 
 export class TravelAgencyScene extends RoomScene {
-  constructor() { super('TravelAgencyScene'); this.title = 'Travel Agency — Routes'; }
+  /** Persisted across rebuild() calls (Phaser reuses the scene instance), so
+   *  switching tabs and tweaking ticket prices doesn't bounce you back. Reset
+   *  on close because RoomScene.create() runs fresh on each entry. */
+  private currentTab: Tab = 'routes';
+
+  constructor() { super('TravelAgencyScene'); this.title = 'Travel Agency'; }
+
+  create() {
+    this.currentTab = 'routes';
+    super.create();
+  }
 
   buildRoom() {
     const state = GameState.get();
     const me = state.human;
     const b = this.panelBounds;
     const left = b.x + 30;
-    const colWidth = (b.w - 60) / 2;
-    const rightCol = left + colWidth + 20;
     const topY = b.y + 80;
 
     // Make sure activeHub is one we actually own (a hub may have been removed
@@ -26,9 +39,20 @@ export class TravelAgencyScene extends RoomScene {
     if (!me.hubs.includes(state.activeHub)) {
       state.activeHub = me.hubs[0];
     }
-    const activeCity = getCity(state.activeHub);
 
-    // -- Hub picker row: one chip per owned hub. Click to switch active hub. --
+    this.buildHubPicker(left, topY);
+    this.buildTabPicker(left, topY + 32);
+
+    // Tab body — hub picker + tab row eat ~70 px; sub-builders treat startY
+    // as their first content row.
+    const startY = topY + 70;
+    if (this.currentTab === 'routes') this.buildRoutesTab(startY);
+    else this.buildAirportTab(startY);
+  }
+
+  private buildHubPicker(left: number, topY: number) {
+    const state = GameState.get();
+    const me = state.human;
     let hx = left;
     const hubLabel = this.addText(hx, topY - 6, 'Hub:', 12, COLORS.textDim);
     hx += 36;
@@ -53,16 +77,53 @@ export class TravelAgencyScene extends RoomScene {
       this.content.add(chip);
       hx += w + 8;
     }
-    // Hint when only one hub: tell the user how to add more.
     if (me.hubs.length === 1) {
       this.addText(hx + 4, topY - 6, '— click a city in the Control Tower map to buy a new hub.', 11, COLORS.textDim);
     }
-    // Avoid lint about unused variable when only one hub is owned.
     void hubLabel;
+  }
+
+  private buildTabPicker(left: number, topY: number) {
+    const tabs: Array<{ id: Tab; label: string }> = [
+      { id: 'routes',  label: 'Routes' },
+      { id: 'airport', label: 'Airport' },
+    ];
+    let tx = left;
+    for (const t of tabs) {
+      const w = 110;
+      const isActive = this.currentTab === t.id;
+      const btn = new Button({
+        scene: this,
+        x: tx + w / 2,
+        y: topY,
+        width: w,
+        height: 24,
+        label: t.label,
+        bg: isActive ? 0x3d6a92 : 0x14304a,
+        bgHover: isActive ? 0x4a7da8 : 0x2a5780,
+        onClick: () => {
+          this.currentTab = t.id;
+          this.scrollTo(0);
+          this.rebuild();
+        },
+      });
+      this.content.add(btn);
+      tx += w + 8;
+    }
+  }
+
+  private buildRoutesTab(startY: number) {
+    const state = GameState.get();
+    const me = state.human;
+    const b = this.panelBounds;
+    const left = b.x + 30;
+    const colWidth = (b.w - 60) / 2;
+    const rightCol = left + colWidth + 20;
+    const activeCity = getCity(state.activeHub);
 
     // LEFT: open new routes from active hub
-    this.addText(left, topY + 38, `New Routes from ${activeCity.name}`, 16, COLORS.accentText);
-    let y = topY + 68;
+    this.addText(left, startY, `New Routes from ${activeCity.name}`, 16, COLORS.accentText);
+    let y = startY + 30;
     this.addText(left,       y, 'Destination', 12, COLORS.textDim);
     this.addText(left + 200, y, 'Distance',    12, COLORS.textDim);
     this.addText(left + 290, y, 'Suggested $', 12, COLORS.textDim);
@@ -106,8 +167,8 @@ export class TravelAgencyScene extends RoomScene {
     const hubRoutes = me.routes.filter(r =>
       r.fromCity === activeCity.id || r.toCity === activeCity.id
     );
-    this.addText(rightCol, topY + 38, `Your Routes from ${activeCity.name}`, 16, COLORS.accentText);
-    y = topY + 68;
+    this.addText(rightCol, startY, `Your Routes from ${activeCity.name}`, 16, COLORS.accentText);
+    y = startY + 30;
 
     if (hubRoutes.length === 0) {
       const msg = me.routes.length === 0
@@ -200,6 +261,73 @@ export class TravelAgencyScene extends RoomScene {
         this.addText(rightCol + 50, y, 'No plane has range for this route.', 12, '#ff9aa6');
       }
       y += 38;
+    }
+  }
+
+  /** "Airport" tab — hub infrastructure upgrades. For now this is just the
+   *  apron gate count: every hub starts with STARTING_GATES (8), with up to
+   *  MAX_GATES_PER_HUB total purchasable. Cost escalates and is scaled by
+   *  the hub's demand multiplier (see gateExpansionCost). */
+  private buildAirportTab(startY: number) {
+    const state = GameState.get();
+    const me = state.human;
+    const b = this.panelBounds;
+    const left = b.x + 30;
+    const activeCity = getCity(state.activeHub);
+    const gates = me.gatesAt(activeCity.id);
+
+    this.addText(left, startY, `${activeCity.name} — Apron`, 16, COLORS.accentText);
+    let y = startY + 30;
+
+    this.addText(left, y, `Gates owned: ${gates} / ${MAX_GATES_PER_HUB}   (start: ${STARTING_GATES})`, 14);
+    y += 24;
+
+    this.addText(
+      left, y,
+      'Each gate adds one parking stall on the apron. Planes share gates when '
+      + 'you exceed the cap — buy more to keep your fleet visible and orderly.',
+      12, COLORS.textDim,
+    );
+    y += 36;
+
+    if (gates >= MAX_GATES_PER_HUB) {
+      this.addText(left, y, `✓ Maxed out at ${MAX_GATES_PER_HUB} gates. No further expansion available.`,
+        13, COLORS.text);
+      y += 24;
+    } else {
+      const cost = gateExpansionCost(gates, activeCity);
+      const canAfford = me.cash >= cost;
+
+      this.addText(left, y, `Next gate (#${gates + 1})`, 13, COLORS.text);
+      this.addText(left + 160, y, `Cost: ${formatMoney(cost)}`, 13, canAfford ? COLORS.text : '#ff9aa6');
+      const buyBtn = new Button({
+        scene: this,
+        x: left + 380, y: y + 7,
+        width: 160, height: 26,
+        label: canAfford ? `Buy +1 gate` : `Need ${formatMoney(cost)}`,
+        onClick: () => {
+          if (!canAfford) return;
+          me.cash -= cost;
+          me.gateCounts[activeCity.id] = gates + 1;
+          state.pushNews(
+            `${me.name} added gate #${gates + 1} at ${activeCity.name} — apron capacity now ${gates + 1}.`,
+          );
+          sound.play('buy');
+          this.rebuild();
+        },
+        disabled: !canAfford,
+      });
+      this.content.add(buyBtn);
+      y += 36;
+
+      // Future-gate cost preview so the player can plan the spend.
+      this.addText(left, y, 'Remaining expansion costs at this hub:', 12, COLORS.textDim);
+      y += 18;
+      for (let g = gates + 1; g < MAX_GATES_PER_HUB; g++) {
+        const c = gateExpansionCost(g, activeCity);
+        this.addText(left + 12, y, `Gate #${g + 1}: ${formatMoney(c)}`, 12, COLORS.textDim);
+        y += 16;
+      }
     }
   }
 

@@ -43,7 +43,18 @@ export class AirportScene extends Phaser.Scene {
   // Apron / runway geometry.
   private readonly apronY = 600;
   private readonly runwayY = 680;
-  private readonly gateXs = [120, 260, 400, 540, 680, 820, 960, 1100];
+  /** Leftmost / rightmost gate centers. Gates are spaced evenly between
+   *  these. Picked so 8 gates land at the original 120 / 260 / ... / 1100
+   *  positions; with 12 gates each step is ~89 px. */
+  private readonly GATE_X_LEFT = 120;
+  private readonly GATE_X_RIGHT = 1100;
+  /** Mutable — recomputed by ensureGateLayout() whenever the active hub or
+   *  its purchased gate count changes. */
+  private gateXs: number[] = [];
+  /** Key form: `${hubId}|${gateCount}`. Used to short-circuit re-layout when
+   *  nothing relevant changed. */
+  private gateLayoutKey = '';
+  private gateBoxLayer!: Phaser.GameObjects.Container;
   private readonly RUNWAY_LEFT = 80;
   private readonly RUNWAY_RIGHT = GAME_WIDTH - 80;
 
@@ -98,11 +109,19 @@ export class AirportScene extends Phaser.Scene {
     // Apron + runway visual.
     this.drawApronAndRunway();
 
+    // Gate boxes go on their own layer beneath the planes so we can redraw
+    // them when the active hub or its purchased gate count changes without
+    // touching the rest of the apron art.
+    this.gateBoxLayer = this.add.container(0, 0);
     // Layers for plane sprites (parked & flight animations) + in-transit
     // tag strip that lives below the apron.
     this.parkedLayer = this.add.container(0, 0);
     this.flightLayer = this.add.container(0, 0);
     this.transitLayer = this.add.container(0, 0);
+
+    // Initial gate-box layout. Subsequent hub-switches and gate purchases
+    // are picked up by ensureGateLayout() in update().
+    this.ensureGateLayout();
 
     // Tooltip used for live room state on hover.
     this.tooltip = new Tooltip(this);
@@ -111,11 +130,16 @@ export class AirportScene extends Phaser.Scene {
     this.attachRoomTooltips();
     this.bindRoomHotkeys();
 
-    // Snapshot status now and on every resume so room visits don't trigger
-    // a flurry of takeoffs/landings on return.
+    // Seed lastStatuses ONCE at scene boot. The clock (in HUDScene) keeps
+    // ticking while the AirportScene is paused for a room visit, so a plane
+    // can transition idle→flying during a Travel Agency trip (the takeoff
+    // sound plays from the dispatch system regardless of which scene is on
+    // top). We deliberately do NOT re-snapshot on RESUME/WAKE — that erased
+    // the prev='idle'/cur='flying' edge and left the player back at the
+    // apron with no takeoff animation. Letting checkStatusChanges() detect
+    // the edge on the first post-resume frame plays the animation slightly
+    // late but visually intact.
     this.snapshotStatuses();
-    this.events.on(Phaser.Scenes.Events.RESUME, () => this.snapshotStatuses());
-    this.events.on(Phaser.Scenes.Events.WAKE,   () => this.snapshotStatuses());
 
     // Bottom-left help text
     this.add.text(20, GAME_HEIGHT - 50, 'Click a room to enter, or press 1-9 / 0 / - / =. ESC to leave a room.', {
@@ -126,10 +150,54 @@ export class AirportScene extends Phaser.Scene {
   }
 
   update() {
+    this.ensureGateLayout();
     this.checkStatusChanges();
     this.drawParkedPlanes();
     this.drawInTransit();
     this.refreshTitleIfHubChanged();
+  }
+
+  /** Recompute gateXs + redraw gate boxes if the active hub changed or its
+   *  purchased gate count changed since the last call. Cheap when unchanged
+   *  — a single string compare. Called every frame from update() so that
+   *  buying a gate (from the Travel Agency Airport tab) shows up next tick. */
+  private ensureGateLayout() {
+    const me = GameState.get().human;
+    const hub = GameState.get().activeHub;
+    const count = me.gatesAt(hub);
+    const key = `${hub}|${count}`;
+    if (key === this.gateLayoutKey) return;
+    // Hub switch invalidates any gate assignments — planes "at" the previous
+    // hub aren't relevant here, and a hub may have a different gate count.
+    const hubChanged = !this.gateLayoutKey.startsWith(`${hub}|`);
+    this.gateLayoutKey = key;
+    if (hubChanged) this.gateByPlaneId.clear();
+
+    // Evenly space gates between GATE_X_LEFT and GATE_X_RIGHT. With count=8
+    // we recover the original 140-px spacing; count=12 gives ~89 px.
+    this.gateXs = [];
+    if (count <= 1) {
+      this.gateXs.push((this.GATE_X_LEFT + this.GATE_X_RIGHT) / 2);
+    } else {
+      const step = (this.GATE_X_RIGHT - this.GATE_X_LEFT) / (count - 1);
+      for (let i = 0; i < count; i++) this.gateXs.push(this.GATE_X_LEFT + i * step);
+    }
+
+    // Redraw gate boxes + labels into gateBoxLayer.
+    this.gateBoxLayer.removeAll(true);
+    this.gateXs.forEach((gx, i) => {
+      const box = this.add.rectangle(gx, this.apronY + 18, 56, 26, 0x1f2e42)
+        .setStrokeStyle(1, 0x4a6a8c, 0.8);
+      const label = this.add.text(gx, this.apronY + 18, `G${i + 1}`, {
+        fontFamily: 'Segoe UI', fontSize: '11px', color: '#7a8aa0',
+      }).setOrigin(0.5);
+      this.gateBoxLayer.add(box);
+      this.gateBoxLayer.add(label);
+    });
+
+    // Existing parked planes need re-layout — their cached gate x-pixel
+    // positions may have shifted with the new spacing.
+    this.parkedSig = '';
   }
 
   /**
@@ -321,16 +389,10 @@ export class AirportScene extends Phaser.Scene {
     const left = this.RUNWAY_LEFT, right = this.RUNWAY_RIGHT;
     const cx = (left + right) / 2;
 
-    // Apron tarmac — lighter so it pops against the floor.
+    // Apron tarmac — lighter so it pops against the floor. Gate stall boxes
+    // are drawn separately on gateBoxLayer by ensureGateLayout() so they can
+    // be redrawn when the active hub or its gate count changes.
     this.add.rectangle(cx, this.apronY, right - left + 40, 64, 0x2c3e54).setStrokeStyle(1, 0x4a6a8c);
-
-    // Gate stalls — visible boxes with gate numbers.
-    this.gateXs.forEach((gx, i) => {
-      this.add.rectangle(gx, this.apronY + 18, 56, 26, 0x1f2e42).setStrokeStyle(1, 0x4a6a8c, 0.8);
-      this.add.text(gx, this.apronY + 18, `G${i + 1}`, {
-        fontFamily: 'Segoe UI', fontSize: '11px', color: '#7a8aa0',
-      }).setOrigin(0.5);
-    });
 
     // "GATES" label
     this.add.text(left, this.apronY - 38, 'GATES',
@@ -416,19 +478,29 @@ export class AirportScene extends Phaser.Scene {
       && !this.animatingIds.has(p.id)
     );
 
-    // Build (id, gateIdx) tuples + a signature; skip rebuild if unchanged.
-    const tuples: Array<{ plane: Plane; gateIdx: number }> = idle.map((plane, i) => ({
-      plane,
-      gateIdx: i % this.gateXs.length,
-    }));
+    // Release gates held by planes that are no longer here (took off, were
+    // sold, switched hubs, etc.) AND aren't currently mid-animation. Keeping
+    // a gate reserved while the plane is animating means the landing icon
+    // taxis to the same gate the parked icon will appear at — and a plane
+    // that just deplaned doesn't visually hop to an earlier vacated gate
+    // when its boarding sequence starts.
+    const idleIds = new Set(idle.map(p => p.id));
+    for (const planeId of [...this.gateByPlaneId.keys()]) {
+      if (!idleIds.has(planeId) && !this.animatingIds.has(planeId)) {
+        this.gateByPlaneId.delete(planeId);
+      }
+    }
+    // Lazily assign a stable gate to any newly-parked plane.
+    for (const plane of idle) this.gateIndexFor(plane);
+
+    const tuples: Array<{ plane: Plane; gateIdx: number }> =
+      idle.map(p => ({ plane: p, gateIdx: this.gateByPlaneId.get(p.id)! }));
     const sig = tuples.map(t => `${t.plane.id}@${t.gateIdx}`).join('|');
     if (sig === this.parkedSig) return;
 
     this.parkedSig = sig;
     this.parkedLayer.removeAll(true);
-    this.gateByPlaneId.clear();
     for (const { plane, gateIdx } of tuples) {
-      this.gateByPlaneId.set(plane.id, gateIdx);
       const icon = this.makePlaneIcon(this.gateXs[gateIdx], this.apronY, plane.model.seats, me.color, 0);
       this.parkedLayer.add(icon);
     }
@@ -436,14 +508,28 @@ export class AirportScene extends Phaser.Scene {
 
   // ----- Animations -----
 
-  /** Stable gate index for a plane — prefers the visual gate set by drawParkedPlanes
-   *  so takeoff lifts off from the gate the player saw, not a different one
-   *  derived from raw planes[] index. Falls back when not yet recorded. */
+  /** Stable gate index for a plane. Persists across the plane's lifecycle at
+   *  this hub — assigned lazily on first request (landing or initial park),
+   *  remembered through the takeoff animation, and released only when the
+   *  plane is no longer at the apron AND no longer animating
+   *  (see drawParkedPlanes). Picks the lowest unoccupied gate; only wraps
+   *  when more planes than gates are parked. */
   private gateIndexFor(plane: Plane): number {
     const recorded = this.gateByPlaneId.get(plane.id);
     if (recorded !== undefined) return recorded;
+    const occupied = new Set(this.gateByPlaneId.values());
+    for (let g = 0; g < this.gateXs.length; g++) {
+      if (!occupied.has(g)) {
+        this.gateByPlaneId.set(plane.id, g);
+        return g;
+      }
+    }
+    // All gates taken — fall back to a stable plane-index wrap so the same
+    // plane keeps the same wrapped gate slot.
     const i = GameState.get().human.planes.indexOf(plane);
-    return Math.max(0, i) % this.gateXs.length;
+    const g = Math.max(0, i) % this.gateXs.length;
+    this.gateByPlaneId.set(plane.id, g);
+    return g;
   }
 
   private animateTakeoff(plane: Plane) {

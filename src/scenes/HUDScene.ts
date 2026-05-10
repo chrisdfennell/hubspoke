@@ -9,6 +9,7 @@ import { creditLimit, effectiveLoanApr, SAVINGS_APY } from '../systems/Bank';
 import { portfolioValue } from '../systems/Stocks';
 import { DIFFICULTIES } from '../state/Difficulty';
 import { netWorth, BILLIONAIRE_VICTORY, MILESTONES, Milestone } from '../systems/Milestones';
+import { Modal } from '../ui/Modal';
 
 export class HUDScene extends Phaser.Scene {
   private dateText!: Phaser.GameObjects.Text;
@@ -32,6 +33,11 @@ export class HUDScene extends Phaser.Scene {
   /** True while the cursor is over the news ticker — pauses scroll so the
    *  player can actually read a headline. */
   private tickerHovered = false;
+  /** Last staff-shortfall value we already alerted the player about. We only
+   *  pop the modal when the shortfall transitions 0→positive or grows — not
+   *  every frame. Reset to 0 once the player resolves it so a future
+   *  shortfall fires the alert again. */
+  private lastShortfallAlerted = 0;
 
   constructor() { super({ key: 'HUDScene', active: false }); }
 
@@ -374,12 +380,32 @@ export class HUDScene extends Phaser.Scene {
     const shortfall = staffShortfall(s.human);
     const base = `Fleet: ${s.human.planes.length}   Routes: ${s.human.routes.length}   Rep: ${Math.round(s.human.reputation)}`;
     if (shortfall > 0) {
-      this.fleetText.setText(`${base}   ⚠ ${shortfall} grounded — hire crew in Personnel`);
+      // Short inline indicator — full instruction lives in the popup + the
+      // fleet-text tooltip, so the top bar doesn't overflow into the date
+      // strip in the middle of the HUD.
+      this.fleetText.setText(`${base}   ⚠ ${shortfall} grounded`);
       this.fleetText.setColor('#ff9aa6');
     } else {
       this.fleetText.setText(base);
       this.fleetText.setColor(COLORS.textDim);
     }
+
+    // Pop a confirmable alert when staff shortfall first appears or grows.
+    // We only fire on the rising edge so the modal doesn't reappear every
+    // frame the issue persists. Reset on resolution so a future shortfall
+    // alerts again.
+    if (shortfall > this.lastShortfallAlerted) {
+      Modal.alert(this, {
+        title: 'Crew Shortage',
+        message:
+          `${shortfall} of your plane${shortfall === 1 ? '' : 's'} ` +
+          `${shortfall === 1 ? 'is' : 'are'} grounded because you don't have ` +
+          `enough pilots and mechanics on staff.\n\n` +
+          `Visit the Personnel room to hire more crew.`,
+        ok: 'Got it',
+      });
+    }
+    this.lastShortfallAlerted = shortfall;
     const speedLabel = s.paused ? 'PAUSED' : `Speed ${s.speed}x`;
     this.speedText.setText(speedLabel);
   }
