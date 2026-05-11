@@ -160,7 +160,14 @@ export class BootScene extends Phaser.Scene {
       x: left + w - 100, y: cy - 16, width: 110, height: 26,
       label: 'New (overwrite)',
       onClick: () => {
-        if (confirm(`Overwrite slot #${slot.id} with a new game?`)) this.openDifficultyPicker(slot.id);
+        Modal.confirm(this, {
+          title: 'Overwrite save?',
+          message: `Slot #${slot.id} currently holds "${slot.airlineName ?? 'an existing save'}". Starting a new game here will overwrite it.`,
+          confirmLabel: 'Overwrite',
+          cancelLabel: 'Cancel',
+          destructive: true,
+          onConfirm: () => this.openDifficultyPicker(slot.id),
+        });
       },
     });
     const deleteBtn = new Button({
@@ -168,10 +175,17 @@ export class BootScene extends Phaser.Scene {
       x: left + w - 100, y: cy + 14, width: 110, height: 26,
       label: 'Delete',
       onClick: () => {
-        if (confirm(`Delete save in slot #${slot.id}? This cannot be undone.`)) {
-          deleteSlot(slot.id);
-          this.renderSlots();
-        }
+        Modal.confirm(this, {
+          title: 'Delete save?',
+          message: `Permanently delete slot #${slot.id} ("${slot.airlineName ?? 'this save'}")? This cannot be undone.`,
+          confirmLabel: 'Delete',
+          cancelLabel: 'Cancel',
+          destructive: true,
+          onConfirm: () => {
+            deleteSlot(slot.id);
+            this.renderSlots();
+          },
+        });
       },
     });
     this.slotLayer.add(continueBtn);

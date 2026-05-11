@@ -9,6 +9,26 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Last native dialogs replaced with Modal
+
+Two stragglers from the original save-slot UI still used the browser's
+`confirm()` — overwrite-slot and delete-slot. Replaced both with
+`Modal.confirm` so the new-game / delete-save flows match the rest of
+the game's look-and-feel.
+
+**Changes** ([BootScene.ts](src/scenes/BootScene.ts))
+- "New (overwrite)" button now pops `Modal.confirm` with the saved
+  airline's name in the message, a destructive-styled "Overwrite"
+  button, and a "Cancel" button.
+- "Delete" button similarly pops `Modal.confirm` with the airline
+  name and a destructive "Delete" button.
+
+Verified with a tree-wide grep — the only remaining `alert` /
+`confirm` / `prompt` references in src/ are the Modal class methods
+themselves. The codebase is now 100% custom-modal.
+
+---
+
 ## 2026-05-11 — Custom airline name + tail color at new-game time
 
 New step in the new-game flow lets the player name their airline and
