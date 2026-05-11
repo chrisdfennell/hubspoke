@@ -19,6 +19,7 @@ import { SettingsScene } from './scenes/rooms/SettingsScene';
 import { HelpScene } from './scenes/rooms/HelpScene';
 import { StatsScene } from './scenes/rooms/StatsScene';
 import { NewspaperScene } from './scenes/NewspaperScene';
+import { InterventionScene } from './scenes/InterventionScene';
 import { GameOverScene } from './scenes/GameOverScene';
 
 new Phaser.Game({
@@ -56,6 +57,7 @@ new Phaser.Game({
     HelpScene,
     StatsScene,
     NewspaperScene,
+    InterventionScene,
     GameOverScene,
   ],
 });

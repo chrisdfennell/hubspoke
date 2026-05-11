@@ -9,6 +9,53 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Random intervention events
+
+Six modal decision events that fire on a rolling weekly cadence,
+turning a mostly-automatic game into one that actually asks you to
+stop and choose. Each event has two options with real cost /
+reputation / state tradeoffs.
+
+**System** ([Interventions.ts](src/systems/Interventions.ts))
+- Daily `clock.onDay` hook with a 5-day cooldown and an 18% roll
+  chance — averages ~one event per game-week.
+- Eligible events filter by player state: maintenance events
+  require a plane, the whistleblower needs ≥5 flights flown, etc.
+- Module-scope `pending` + `consumePendingIntervention()` —
+  same polling pattern as the weekly newspaper. HUDScene drains
+  it each tick and launches the modal.
+- `resetInterventions()` called from `BootScene.go()` so a fresh
+  run on the same tab doesn't carry state forward.
+- Each event roll plays the `sponsor` chime so a heads-down
+  player notices the modal coming up.
+
+**Events**
+1. **Engine Inspection Flag** — random plane flagged. Full
+   overhaul ($30k, +30% condition) vs patch ($5k, −10% condition).
+2. **Pilots' Union Demands** — pay $15k bonus (+5 rep) vs refuse
+   (−3 rep).
+3. **Celebrity Charter Offer** — accept (+$40k, +3 rep) vs decline.
+4. **Anonymous Threat** — pay $15k hush vs ignore (70% it goes
+   public for −8 rep, 30% it was a bluff).
+5. **Fuel Supplier Kickback** — accept rebate (+$25k) vs decline.
+6. **Charity Gala Sponsorship** — donate $30k (+8 rep) vs skip
+   (−1 rep).
+
+**Scene** ([InterventionScene.ts](src/scenes/InterventionScene.ts))
+- Modal panel with gold accent stripe (matches milestone popup +
+  tutorial banner). Title, body, optional context footer, two
+  side-by-side choice buttons.
+- Pauses HUDScene on create — the clock waits for the player.
+- Disabled options (can't afford) render greyed with an inline
+  red reason underneath. Esc dismisses without acting and pushes
+  a "Deferred:" news entry so the player isn't confused why
+  nothing happened.
+
+**Settings** — new `showInterventions` toggle (default on) added
+to `GameSettings` and the Settings room.
+
+---
+
 ## 2026-05-11 — Livery preview + tail-accent on every silhouette
 
 Liveries are no longer cosmetic-name-only — each one now actually

@@ -12,6 +12,7 @@ import { netWorth, BILLIONAIRE_VICTORY, MILESTONES, Milestone } from '../systems
 import { Modal } from '../ui/Modal';
 import { getCEO } from '../state/ceos';
 import { consumePendingPaper } from '../systems/Newspaper';
+import { consumePendingIntervention } from '../systems/Interventions';
 import { tutorialDismissed } from '../systems/Tutorial';
 import { TutorialBanner } from '../ui/TutorialBanner';
 
@@ -194,6 +195,7 @@ export class HUDScene extends Phaser.Scene {
     this.checkGameOver();
     this.checkNewMilestones();
     this.checkPendingPaper();
+    this.checkPendingIntervention();
     this.tutorialBanner?.tick();
   }
 
@@ -204,6 +206,17 @@ export class HUDScene extends Phaser.Scene {
     if (this.scene.isActive('NewspaperScene')) return;
     const paper = consumePendingPaper();
     if (paper) this.scene.launch('NewspaperScene', { paper });
+  }
+
+  /** Same polling pattern as the weekly paper — Interventions queues a
+   *  random event modal periodically; we launch it here. Guarded against
+   *  double-launch and stacked on top of the newspaper if both happen on
+   *  the same day (the newspaper wins; the intervention waits). */
+  private checkPendingIntervention() {
+    if (this.scene.isActive('InterventionScene')) return;
+    if (this.scene.isActive('NewspaperScene')) return;
+    const intervention = consumePendingIntervention();
+    if (intervention) this.scene.launch('InterventionScene', { intervention });
   }
 
   /** If a milestone was crossed since we last looked, show its celebration. */

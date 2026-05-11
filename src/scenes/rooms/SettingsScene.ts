@@ -147,6 +147,18 @@ export class SettingsScene extends RoomScene {
     });
     y += 56;
 
+    // -- Intervention events --
+    this.addText(left, y, 'Random intervention events', 14);
+    this.addText(left + 8, y + 22,
+      'Roughly weekly: pop a modal with a decision (engine flag, pilots\' raise, charter offer, etc.). Off = quieter run, no decision prompts.',
+      11, COLORS.textDim);
+    this.addToggle(rightEdge, y + 8, settings.showInterventions, (next) => {
+      settings.showInterventions = next;
+      saveNow();
+      this.rebuild();
+    });
+    y += 56;
+
     // -- News ticker filter --
     this.addText(left, y, 'News ticker categories', 14);
     this.addText(left + 8, y + 22,

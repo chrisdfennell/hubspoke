@@ -51,6 +51,10 @@ export interface GameSettings {
   /** When true, a paper-styled weekly summary pops every 7 in-game days
    *  with headlines, the week's stats, and passenger letters. */
   showWeeklyPaper: boolean;
+  /** When true, random intervention events fire roughly weekly with
+   *  modal choice prompts (engine flag, pilots' raise, charter offer,
+   *  etc.). Disable for a quieter run. */
+  showInterventions: boolean;
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -66,6 +70,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   autoRepairThreshold: 0,
   showCompetitorPrices: true,
   showWeeklyPaper: true,
+  showInterventions: true,
 };
 
 /** Bump when a backwards-incompatible balance change ships. The migrator in
