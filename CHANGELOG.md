@@ -9,6 +9,45 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Intervention pool expansion: +10 event templates
+
+Bumped the intervention pool from 6 to **16 templates** so the same
+half-dozen events don't repeat once you're a few in-game weeks in.
+Each new event has eligibility filters (some need flights flown,
+some need crew, some need planes) so the pool feels appropriate
+to your run's stage.
+
+**New event templates** ([Interventions.ts](src/systems/Interventions.ts))
+
+- **Regulator Audit** — pay $20k for clean prep, or refuse and roll
+  50/50 on a $50k fine + −5 rep. Requires >10 flights.
+- **Rival Poaching Pilot** — counter with $25k retention bonus, or
+  let the captain go (−1 pilot, −2 rep). Requires >2 pilots.
+- **Regional Festival Surge** — fund a $15k ad campaign for a
+  variable $25k–$50k revenue boost, or skip. Requires ≥1 route.
+- **Stowaway Discovered** — quiet $5k settlement, or 40% chance the
+  story goes public for −3 rep. Requires >3 flights.
+- **VIP Lounge Renovation** — invest $40k for +6 rep, or defer.
+- **Insurance Premium Hike** — accept $30k hike, or pay $5k lawyer
+  retainer and negotiate (60% → $20k+$5k, 40% → $30k+$5k).
+  Requires ≥1 plane.
+- **Local TV Interview** — accept and gamble (70% +6 rep / 30% −3
+  rep), or decline politely.
+- **Plane Naming Contest** — $10k PR contest for +4 rep, or pass.
+  Requires ≥1 plane.
+- **Cargo Pilfering Scandal** — settle quietly with $20k severance,
+  or open public investigation (−3 rep). Requires >5 flights.
+- **Industry Conference Keynote** — $20k for keynote slot and +5
+  rep, or send regrets. Requires >20 flights (mid-game tier).
+
+**Variety the pool now covers:**
+- Theme: regulation, HR, marketing, PR, ops, charity, industry
+- Outcome type: certain trade, probabilistic gamble (50/50, 60/40,
+  70/30, 40%), revenue investment, pure pay-for-rep
+- Stake size: $5k stowaway settlement up to $40k lounge renovation
+
+---
+
 ## 2026-05-11 — Random intervention events
 
 Six modal decision events that fire on a rolling weekly cadence,

@@ -245,6 +245,336 @@ const TEMPLATES: InterventionTemplate[] = [
       ],
     }),
   },
+
+  // ----- Regulator audit: certain cost vs probabilistic fine. -----
+  {
+    id: 'regulator-audit',
+    requires: (s) => s.stats.flights > 10,
+    build: () => ({
+      id: 'regulator-audit',
+      title: 'Civil Aviation Regulator Audit',
+      description:
+        'A federal regulator wants to schedule a full operations audit. You can pay for expedited ' +
+        'preparation and a clean process, or refuse and roll the dice — they\'ll find something, but ' +
+        'it might be a minor finding instead of a major fine.',
+      options: [
+        {
+          label: 'Pay for prep ($20,000, clean audit)',
+          disabledReason: (st) => st.human.cash >= 20_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 20_000;
+            st.pushNews(`${st.human.name} passed a regulator audit. No findings.`);
+          },
+        },
+        {
+          label: 'Refuse — gamble (50% chance of $50k fine + −5 rep)',
+          apply: (st) => {
+            if (Math.random() < 0.5) {
+              st.human.cash -= 50_000;
+              st.human.reputation = Math.max(0, st.human.reputation - 5);
+              st.pushNews(`⚠ Regulator fined ${st.human.name} $50k — operational findings made public.`);
+            } else {
+              st.pushNews(`${st.human.name} dodged a regulator audit on a technicality.`);
+            }
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Rival poaching pilot: pay to retain or lose crew. -----
+  {
+    id: 'pilot-poaching',
+    requires: (s) => s.human.pilots > 2,
+    build: (s) => ({
+      id: 'pilot-poaching',
+      title: 'Rival Poaching Your Senior Pilot',
+      description:
+        `A competing airline has made a lateral offer to one of ${s.human.name}'s most experienced ` +
+        `captains. You can counter with a retention bonus, or let them walk.`,
+      options: [
+        {
+          label: 'Counter with retention bonus ($25,000)',
+          disabledReason: (st) => st.human.cash >= 25_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 25_000;
+            st.pushNews(`${st.human.name} matched a rival's poaching offer. Captain stays.`);
+          },
+        },
+        {
+          label: 'Let them go (−1 pilot, −2 reputation)',
+          apply: (st) => {
+            st.human.pilots = Math.max(0, st.human.pilots - 1);
+            st.human.reputation = Math.max(0, st.human.reputation - 2);
+            st.pushNews(`⚠ ${st.human.name} lost a senior captain to a rival. Crew morale takes a hit.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Regional festival surge: invest in marketing for revenue. -----
+  {
+    id: 'festival-surge',
+    requires: (s) => s.human.routes.length > 0,
+    build: () => ({
+      id: 'festival-surge',
+      title: 'Regional Festival Marketing Surge',
+      description:
+        'A regional cultural festival is driving a one-time spike in tourist demand. Marketing ' +
+        'pitched an aggressive ad buy to capture the surge. They\'re asking for $15,000 to fund ' +
+        'the campaign — expected upside is roughly $35,000 in incremental ticket revenue.',
+      options: [
+        {
+          label: 'Fund the campaign ($15,000)',
+          disabledReason: (st) => st.human.cash >= 15_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 15_000;
+            // Ad-buy upside is variable — usually beats the spend, occasionally
+            // it's a wash. Range $25k - $50k revenue.
+            const surge = 25_000 + Math.floor(Math.random() * 25_000);
+            st.human.cash += surge;
+            st.pushNews(`${st.human.name}'s festival ad buy returned ${'$' + surge.toLocaleString('en-US')} in ticket revenue.`);
+          },
+        },
+        {
+          label: 'Skip the campaign',
+          apply: (st) => {
+            st.pushNews(`${st.human.name} skipped a regional festival ad opportunity. Rivals capitalized.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Stowaway discovered: pay or risk PR leak. -----
+  {
+    id: 'stowaway',
+    requires: (s) => s.stats.flights > 3,
+    build: () => ({
+      id: 'stowaway',
+      title: 'Stowaway Discovered',
+      description:
+        'Ground crew found a stowaway in a cargo hold during turnaround. They\'ve been detained ' +
+        'and authorities notified. Internal review is one path — settle quietly and limit press ' +
+        'exposure. Or you can let it run its course publicly.',
+      options: [
+        {
+          label: 'Quiet settlement ($5,000)',
+          disabledReason: (st) => st.human.cash >= 5_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 5_000;
+            st.pushNews(`${st.human.name} handled a stowaway incident internally.`);
+          },
+        },
+        {
+          label: 'Let it run public (40% chance of −3 reputation)',
+          apply: (st) => {
+            if (Math.random() < 0.4) {
+              st.human.reputation = Math.max(0, st.human.reputation - 3);
+              st.pushNews(`⚠ Stowaway story embarrassed ${st.human.name}. Press carried it for a week.`);
+            } else {
+              st.pushNews(`${st.human.name}'s stowaway incident faded from the news cycle.`);
+            }
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- VIP Lounge renovation: pay-for-rep investment. -----
+  {
+    id: 'lounge-renovation',
+    requires: () => true,
+    build: () => ({
+      id: 'lounge-renovation',
+      title: 'VIP Lounge Renovation Pitch',
+      description:
+        'Your interior-design firm has proposed a $40,000 refurbishment of the flagship VIP lounge — ' +
+        'new espresso bar, recliners, runway view. Industry magazines have lined up coverage.',
+      options: [
+        {
+          label: 'Approve renovation ($40,000, +6 rep)',
+          disabledReason: (st) => st.human.cash >= 40_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 40_000;
+            st.human.reputation = Math.min(100, st.human.reputation + 6);
+            st.pushNews(`${st.human.name}'s renovated VIP lounge gets industry praise. +6 reputation.`);
+          },
+        },
+        {
+          label: 'Defer (no change)',
+          apply: (st) => {
+            st.pushNews(`${st.human.name} deferred the VIP lounge renovation. Designer offered the pitch to a rival.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Insurance premium hike: certain cost vs gambled negotiation. -----
+  {
+    id: 'insurance-hike',
+    requires: (s) => s.human.planes.length > 0,
+    build: () => ({
+      id: 'insurance-hike',
+      title: 'Insurance Premium Renewal',
+      description:
+        'Your aviation insurer wants to raise this year\'s premium by $30,000 citing fleet wear. ' +
+        'You can accept the hike, or hire counsel to negotiate it down. Negotiation costs a $5,000 ' +
+        'lawyer retainer either way; success is roughly a coin flip.',
+      options: [
+        {
+          label: 'Accept the hike ($30,000)',
+          disabledReason: (st) => st.human.cash >= 30_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 30_000;
+            st.pushNews(`${st.human.name} renewed insurance — premium up $30k.`);
+          },
+        },
+        {
+          label: 'Negotiate (60% → $20k+$5k, 40% → $30k+$5k)',
+          disabledReason: (st) => st.human.cash >= 35_000 ? null : 'Need $35k headroom to cover worst case.',
+          apply: (st) => {
+            st.human.cash -= 5_000;  // lawyer retainer always paid
+            if (Math.random() < 0.6) {
+              st.human.cash -= 20_000;
+              st.pushNews(`${st.human.name}'s counsel negotiated the premium down. Net $25k spent (saved $5k).`);
+            } else {
+              st.human.cash -= 30_000;
+              st.pushNews(`${st.human.name}'s negotiation failed. Full premium + lawyer = $35k spent.`);
+            }
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Local TV interview: probabilistic rep swing. -----
+  {
+    id: 'tv-interview',
+    requires: () => true,
+    build: () => ({
+      id: 'tv-interview',
+      title: 'Local TV Interview Request',
+      description:
+        'A regional news program wants a 10-minute live interview with the CEO. Live TV is high-' +
+        'leverage — a good appearance pays in goodwill; a bad one rattles passengers. Your call.',
+      options: [
+        {
+          label: 'Accept (70% → +6 rep, 30% → −3 rep)',
+          apply: (st) => {
+            if (Math.random() < 0.7) {
+              st.human.reputation = Math.min(100, st.human.reputation + 6);
+              st.pushNews(`★ ${st.human.name}'s CEO nailed the interview. +6 reputation.`);
+            } else {
+              st.human.reputation = Math.max(0, st.human.reputation - 3);
+              st.pushNews(`⚠ ${st.human.name}'s CEO fumbled a live interview. −3 reputation.`);
+            }
+          },
+        },
+        {
+          label: 'Decline politely (no effect)',
+          apply: (st) => {
+            st.pushNews(`${st.human.name} declined a TV interview request.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Plane naming contest: cheap rep bump via PR. -----
+  {
+    id: 'naming-contest',
+    requires: (s) => s.human.planes.length > 0,
+    build: () => ({
+      id: 'naming-contest',
+      title: 'Plane Naming Contest',
+      description:
+        'Marketing wants to run a public contest where local schoolchildren name your next plane. ' +
+        'Costs $10,000 to run; the resulting press cycle has historically been worth more than that ' +
+        'in goodwill.',
+      options: [
+        {
+          label: 'Run the contest ($10,000, +4 reputation)',
+          disabledReason: (st) => st.human.cash >= 10_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 10_000;
+            st.human.reputation = Math.min(100, st.human.reputation + 4);
+            st.pushNews(`${st.human.name} ran a plane-naming contest — heartwarming local press. +4 reputation.`);
+          },
+        },
+        {
+          label: 'Pass',
+          apply: (st) => {
+            st.pushNews(`${st.human.name} declined a plane-naming contest pitch.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Cargo pilfering scandal: severance vs investigative path. -----
+  {
+    id: 'pilfering-scandal',
+    requires: (s) => s.stats.flights > 5,
+    build: () => ({
+      id: 'pilfering-scandal',
+      title: 'Cargo Pilfering Allegations',
+      description:
+        'Internal audit flagged a pattern of high-value items disappearing in transit. Two ground ' +
+        'crew are implicated. You can settle quietly with severance and a non-disclosure, or open a ' +
+        'full investigation. The investigation is free but the story tends to leak.',
+      options: [
+        {
+          label: 'Quiet severance ($20,000)',
+          disabledReason: (st) => st.human.cash >= 20_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 20_000;
+            st.pushNews(`${st.human.name} settled cargo pilfering allegations privately.`);
+          },
+        },
+        {
+          label: 'Open investigation (−3 reputation)',
+          apply: (st) => {
+            st.human.reputation = Math.max(0, st.human.reputation - 3);
+            st.pushNews(`⚠ ${st.human.name}'s cargo pilfering investigation leaked. −3 reputation.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Industry conference invite: pay to attend, gain industry pull. -----
+  {
+    id: 'industry-conference',
+    requires: (s) => s.stats.flights > 20,
+    build: () => ({
+      id: 'industry-conference',
+      title: 'Industry Conference Keynote',
+      description:
+        'An industry trade group invited your CEO to deliver a keynote at their annual conference. ' +
+        'Travel, prep, and sponsorship fees run $20,000. Attending the right rooms pays in industry ' +
+        'goodwill and potential future deals.',
+      options: [
+        {
+          label: 'Attend and keynote ($20,000, +5 reputation)',
+          disabledReason: (st) => st.human.cash >= 20_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 20_000;
+            st.human.reputation = Math.min(100, st.human.reputation + 5);
+            st.pushNews(`${st.human.name}'s CEO keynoted a trade conference. +5 reputation.`);
+          },
+        },
+        {
+          label: 'Send regrets (no effect)',
+          apply: (st) => {
+            st.pushNews(`${st.human.name} declined an industry conference keynote.`);
+          },
+        },
+      ],
+    }),
+  },
 ];
 
 let daysSinceLast = 0;
