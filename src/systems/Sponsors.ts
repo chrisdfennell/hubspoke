@@ -5,6 +5,7 @@ import { CITIES, getCity } from '../state/catalog';
 import { SponsorContract } from '../state/Sponsor';
 import { dateToDay } from '../state/demandModifiers';
 import { clock, formatMoney } from './Clock';
+import { sound } from './Sound';
 
 const MAX_OFFERS = 3;
 const MAX_ACTIVE = 3;
@@ -107,6 +108,7 @@ function rollDailyOffers() {
     state.pushNews(
       `✦ ${offer.brand} ${offer.pitch} to ${getCity(offer.toCity).name} — ${offer.target.toLocaleString('en-US')} pax for ${formatMoney(offer.reward)}.`,
     );
+    sound.play('sponsor');
   }
 }
 

@@ -4,6 +4,7 @@ import { WeeklyPaper } from '../systems/Newspaper';
 import { formatMoney } from '../systems/Clock';
 import { getCity } from '../state/catalog';
 import { Button } from '../ui/Button';
+import { sound } from '../systems/Sound';
 
 function cityShort(id: string): string {
   return getCity(id).name;
@@ -33,6 +34,9 @@ export class NewspaperScene extends Phaser.Scene {
 
   create() {
     this.scene.pause('HUDScene');
+    // Soft page-turn ding so the player knows the modal arrived — easy
+    // to miss the visual cue if they're heads-down in another room.
+    sound.play('paper');
 
     // Full-screen dark backdrop. Marked interactive so clicks on it (anywhere
     // outside the paper) don't fall through to the airport/room behind.

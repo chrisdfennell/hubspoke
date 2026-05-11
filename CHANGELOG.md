@@ -9,6 +9,49 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Differentiated plane silhouettes + SFX pass
+
+Two polish wins paired up.
+
+**Plane silhouettes vary by class**
+([catalog.ts](src/state/catalog.ts), [AirportScene.ts](src/scenes/AirportScene.ts))
+- New `cls: 'turboprop' | 'narrowbody' | 'widebody'` field on every
+  `PlaneModel`. Assignments:
+  - **Turboprop**: Cessna 208, ATR-72, Q400
+  - **Narrowbody**: A220, B737, A320
+  - **Widebody**: B747, A380
+- `makePlaneIcon` now branches on class and draws three distinct
+  silhouettes:
+  - **Turboprop** — shorter, blunter nose (no streamlined point) +
+    straighter rectangular wings + two small dark prop-disc circles
+    on the wing leading edge.
+  - **Narrowbody** — original sleek pointed fuselage with swept M-
+    wings. Baseline shape.
+  - **Widebody** — longer/fatter fuselage + bigger swept wings +
+    four small dark engine pods slung under each wing pair + a taller
+    tail fin.
+- Size still scales by `seats` so within a class a bigger plane is
+  visibly larger. Default class (`'narrowbody'`) keeps any future
+  call sites that omit the parameter rendering the same as before.
+- All 6 call sites in AirportScene updated (parked layer, visitor
+  layer, takeoff anim, landing anim, visitor takeoff anim, visitor
+  landing anim) to pass `plane.model.cls`.
+
+**SFX pass — achievement / sponsor / paper**
+([Sound.ts](src/systems/Sound.ts))
+- New synth sounds:
+  - `achievement` — 4-note ascending triangle-wave fanfare (C5 → E5 →
+    G5 → C6). Fires when `checkAchievements` unlocks anything; one
+    ding per check tick, not per id, so a batch unlock doesn't cause
+    a 4-arpeggio cascade.
+  - `sponsor` — two-tone sine chime (988 Hz → 1318 Hz). Fires when
+    `Sponsors.rollDailyOffers` generates a new offer.
+  - `paper` — soft noise burst + 440 Hz mid tone. Fires when the
+    weekly newspaper modal opens, so a player heads-down in another
+    room hears the page-turn.
+
+---
+
 ## 2026-05-11 — Apron condition warnings + per-route lifetime stats
 
 Two polish wins paired up.

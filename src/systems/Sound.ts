@@ -16,7 +16,10 @@ export type SoundName =
   | 'cashGain'
   | 'cashLoss'
   | 'gameOver'
-  | 'sabotage';
+  | 'sabotage'
+  | 'achievement'
+  | 'sponsor'
+  | 'paper';
 
 const MUTE_KEY = 'airline-tycoon-mute';
 
@@ -257,7 +260,32 @@ class SoundManager {
       case 'cashLoss': this.synthCashLoss(ctx); break;
       case 'gameOver': this.synthGameOver(ctx); break;
       case 'sabotage': this.synthSabotage(ctx); break;
+      case 'achievement': this.synthAchievement(ctx); break;
+      case 'sponsor':     this.synthSponsor(ctx); break;
+      case 'paper':       this.synthPaper(ctx); break;
     }
+  }
+
+  private synthAchievement(ctx: AudioContext) {
+    // Bright 4-note ascending fanfare — C5 → E5 → G5 → C6. Faster than
+    // 'buy' and reaches an octave higher to read as "unlocked!" rather
+    // than "purchased."
+    this.tone(ctx, 523.25, 0.10, 'triangle', 0.20);
+    setTimeout(() => this.tone(ctx, 659.25, 0.10, 'triangle', 0.20),  60);
+    setTimeout(() => this.tone(ctx, 783.99, 0.10, 'triangle', 0.22), 120);
+    setTimeout(() => this.tone(ctx, 1046.5, 0.28, 'triangle', 0.26), 180);
+  }
+
+  private synthSponsor(ctx: AudioContext) {
+    // Two-tone chime — high, friendly, "you have new mail" energy.
+    this.tone(ctx, 988, 0.14, 'sine', 0.18);
+    setTimeout(() => this.tone(ctx, 1318, 0.20, 'sine', 0.18), 110);
+  }
+
+  private synthPaper(ctx: AudioContext) {
+    // Short page-turn: noise burst + a single soft mid tone.
+    this.noiseBurst(ctx, 0.18, 0.04);
+    this.tone(ctx, 440, 0.18, 'sine', 0.12);
   }
 
   // ----- Synthesis primitives -----

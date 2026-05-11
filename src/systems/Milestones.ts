@@ -2,6 +2,7 @@ import { GameState } from '../state/GameState';
 import { Player } from '../state/Player';
 import { portfolioValue } from './Stocks';
 import { clock } from './Clock';
+import { sound } from './Sound';
 import { ACHIEVEMENTS, Achievement, isUnlocked } from '../state/achievements';
 
 export interface Milestone {
@@ -45,13 +46,19 @@ export function netWorth(player: Player): number {
 export function checkAchievements() {
   const state = GameState.get();
   const reached = new Set(state.achievementsUnlocked);
+  let firedAny = false;
   for (const a of ACHIEVEMENTS) {
     if (reached.has(a.id)) continue;
     if (!isUnlocked(a, state)) continue;
     reached.add(a.id);
     state.pushNews(`★ ${headlineFor(a)}`);
+    firedAny = true;
   }
   state.achievementsUnlocked = [...reached];
+  // One ding per check tick, even if multiple unlocked in the same pass —
+  // a batch unlock (e.g. on first Stats panel open) shouldn't be a
+  // 4-note arpeggio for each entry.
+  if (firedAny) sound.play('achievement');
 }
 
 function headlineFor(a: Achievement): string {

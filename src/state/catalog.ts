@@ -1,6 +1,8 @@
 // Static catalogs: plane models, cities. Real game has many more — these are
 // representative starters. Add freely.
 
+export type PlaneClass = 'turboprop' | 'narrowbody' | 'widebody';
+
 export interface PlaneModel {
   id: string;
   name: string;
@@ -21,6 +23,8 @@ export interface PlaneModel {
   maintenancePerHour: number;
   // Plane age 0-1 (1 = brand new).
   conditionAtPurchase: number;
+  // Visual class — drives the on-apron silhouette in AirportScene.makePlaneIcon.
+  cls: PlaneClass;
 }
 
 export const PLANE_MODELS: PlaneModel[] = [
@@ -36,6 +40,7 @@ export const PLANE_MODELS: PlaneModel[] = [
     fuelPerKm: 0.5,
     maintenancePerHour: 25,
     conditionAtPurchase: 1.0,
+    cls: 'turboprop',
   },
   {
     id: 'atr-72',
@@ -55,6 +60,7 @@ export const PLANE_MODELS: PlaneModel[] = [
     fuelPerKm: 4.5,
     maintenancePerHour: 100,
     conditionAtPurchase: 1.0,
+    cls: 'turboprop',
   },
   {
     id: 'b737',
@@ -73,6 +79,7 @@ export const PLANE_MODELS: PlaneModel[] = [
     fuelPerKm: 5.0,
     maintenancePerHour: 280,
     conditionAtPurchase: 1.0,
+    cls: 'narrowbody',
   },
   {
     id: 'a320',
@@ -91,6 +98,7 @@ export const PLANE_MODELS: PlaneModel[] = [
     fuelPerKm: 4.0,
     maintenancePerHour: 290,
     conditionAtPurchase: 1.0,
+    cls: 'narrowbody',
   },
   {
     id: 'b747',
@@ -104,6 +112,7 @@ export const PLANE_MODELS: PlaneModel[] = [
     fuelPerKm: 22.0,
     maintenancePerHour: 580,
     conditionAtPurchase: 1.0,
+    cls: 'widebody',
   },
   {
     id: 'q400',
@@ -121,6 +130,7 @@ export const PLANE_MODELS: PlaneModel[] = [
     fuelPerKm: 2.4,
     maintenancePerHour: 120,
     conditionAtPurchase: 1.0,
+    cls: 'turboprop',
   },
   {
     id: 'a220',
@@ -134,6 +144,7 @@ export const PLANE_MODELS: PlaneModel[] = [
     fuelPerKm: 3.5,
     maintenancePerHour: 240,
     conditionAtPurchase: 1.0,
+    cls: 'narrowbody',
   },
   {
     id: 'a380',
@@ -147,6 +158,7 @@ export const PLANE_MODELS: PlaneModel[] = [
     fuelPerKm: 17.0,
     maintenancePerHour: 720,
     conditionAtPurchase: 1.0,
+    cls: 'widebody',
   },
 ];
 

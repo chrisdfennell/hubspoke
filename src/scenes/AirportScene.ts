@@ -7,7 +7,7 @@ import { Tooltip } from '../ui/Tooltip';
 import { formatMoney } from '../systems/Clock';
 import { staffShortfall } from '../systems/Personnel';
 import { portfolioValue } from '../systems/Stocks';
-import { getCity } from '../state/catalog';
+import { getCity, PlaneClass } from '../state/catalog';
 
 interface RoomDef {
   id: string;
@@ -578,7 +578,7 @@ export class AirportScene extends Phaser.Scene {
     this.parkedLayer.removeAll(true);
     for (const { plane, gateIdx, tier } of tuples) {
       const x = this.gateXs[gateIdx];
-      const icon = this.makePlaneIcon(x, this.apronY, plane.model.seats, me.color, 0);
+      const icon = this.makePlaneIcon(x, this.apronY, plane.model.seats, me.color, 0, plane.model.cls);
       this.parkedLayer.add(icon);
       // Short tail-number label above the plane. Plane.id is sequential ("p1",
       // "p2", …) and globally unique, so it doubles as a stable per-plane
@@ -697,7 +697,7 @@ export class AirportScene extends Phaser.Scene {
     this.visitorLayer.removeAll(true);
     for (const p of positions) {
       const icon = this.makePlaneIcon(
-        p.x, this.VISITOR_Y, p.plane.model.seats, p.owner.color, 0,
+        p.x, this.VISITOR_Y, p.plane.model.seats, p.owner.color, 0, p.plane.model.cls,
       );
       icon.setScale(0.7);
       this.visitorLayer.add(icon);
@@ -761,7 +761,7 @@ export class AirportScene extends Phaser.Scene {
     this.animatingRivalIds.add(plane.id);
     this.visitorSig = '';   // force visitor-row re-render now that this one's leaving
 
-    const icon = this.makePlaneIcon(startX, this.VISITOR_Y, plane.model.seats, owner.color, startRot);
+    const icon = this.makePlaneIcon(startX, this.VISITOR_Y, plane.model.seats, owner.color, startRot, plane.model.cls);
     icon.setScale(0.9);
     this.flightLayer.add(icon);
 
@@ -801,7 +801,7 @@ export class AirportScene extends Phaser.Scene {
     this.animatingRivalIds.add(plane.id);
     this.visitorSig = '';
 
-    const icon = this.makePlaneIcon(startX, this.runwayY, plane.model.seats, owner.color, flightRot);
+    const icon = this.makePlaneIcon(startX, this.runwayY, plane.model.seats, owner.color, flightRot, plane.model.cls);
     icon.setScale(0.9);
     this.flightLayer.add(icon);
 
@@ -902,7 +902,7 @@ export class AirportScene extends Phaser.Scene {
         return;
       }
 
-      const icon = this.makePlaneIcon(gateX, this.apronY, seats, me.color, startRot);
+      const icon = this.makePlaneIcon(gateX, this.apronY, seats, me.color, startRot, plane.model.cls);
       icon.setScale(1.3); // bigger during animation for visibility
       this.flightLayer.add(icon);
 
@@ -992,7 +992,7 @@ export class AirportScene extends Phaser.Scene {
     this.activeLandingEndsAt.set(plane.id, this.time.now + this.a(2800));
     const startX = entersFromRight ? GAME_WIDTH + 80 : -80;
     const flightRot = entersFromRight ? Math.PI : 0;
-    const icon = this.makePlaneIcon(startX, this.runwayY, seats, me.color, flightRot);
+    const icon = this.makePlaneIcon(startX, this.runwayY, seats, me.color, flightRot, plane.model.cls);
     icon.setScale(1.3);
     this.flightLayer.add(icon);
 
@@ -1160,7 +1160,25 @@ export class AirportScene extends Phaser.Scene {
   }
 
   // ----- Plane icon helper -----
-  private makePlaneIcon(x: number, y: number, seats: number, color: number, rotationRad: number): Phaser.GameObjects.Graphics {
+  /**
+   * Draw a top-down plane silhouette. The shape varies by class so a
+   * Cessna doesn't read identical to a B747:
+   *
+   * - **Turboprop** — shorter / blunter nose, straighter wings, two tiny
+   *   prop-disc circles on the wing leading edge.
+   * - **Narrowbody** — the original sleek pointed fuselage with swept M-
+   *   wings. Baseline shape (proven).
+   * - **Widebody** — longer fatter fuselage, bigger swept wings, two
+   *   engine pods hanging under each wing as small ovals.
+   *
+   * Size still scales by seat count so within a class a bigger plane is
+   * visibly larger. All shapes point along +X with the nose forward; the
+   * caller sets `rotationRad` to point them down the runway.
+   */
+  private makePlaneIcon(
+    x: number, y: number, seats: number, color: number,
+    rotationRad: number, cls: PlaneClass = 'narrowbody',
+  ): Phaser.GameObjects.Graphics {
     const size = 4 + Math.sqrt(seats) * 0.6;
     const g = this.add.graphics({ x, y });
     const s = size;
@@ -1169,38 +1187,123 @@ export class AirportScene extends Phaser.Scene {
     g.fillEllipse(s * 0.15, s * 0.45, s * 2.6, s * 1.4);
     g.fillStyle(color, 1);
     g.lineStyle(1, 0x000000, 0.7);
-    // Fuselage
-    g.beginPath();
-    g.moveTo( s * 1.2, 0);
-    g.lineTo(-s * 0.6, s * 0.18);
-    g.lineTo(-s * 1.0, s * 0.18);
-    g.lineTo(-s * 1.0, -s * 0.18);
-    g.lineTo(-s * 0.6, -s * 0.18);
-    g.closePath();
-    g.fillPath();
-    g.strokePath();
-    // Wings
-    g.beginPath();
-    g.moveTo( s * 0.0, 0);
-    g.lineTo(-s * 0.4,  s * 0.95);
-    g.lineTo(-s * 0.6,  s * 0.95);
-    g.lineTo(-s * 0.3,  0);
-    g.lineTo(-s * 0.6, -s * 0.95);
-    g.lineTo(-s * 0.4, -s * 0.95);
-    g.closePath();
-    g.fillPath();
-    g.strokePath();
-    // Tail fin
-    g.beginPath();
-    g.moveTo(-s * 0.85, 0);
-    g.lineTo(-s * 1.1,  s * 0.4);
-    g.lineTo(-s * 1.2,  s * 0.4);
-    g.lineTo(-s * 1.0,  0);
-    g.lineTo(-s * 1.2, -s * 0.4);
-    g.lineTo(-s * 1.1, -s * 0.4);
-    g.closePath();
-    g.fillPath();
-    g.strokePath();
+
+    if (cls === 'turboprop') {
+      // Shorter, fatter fuselage — blunter nose because real turboprops
+      // have a propeller hub instead of a streamlined point.
+      g.beginPath();
+      g.moveTo( s * 0.95, s * 0.07);
+      g.lineTo( s * 1.0,  0);
+      g.lineTo( s * 0.95, -s * 0.07);
+      g.lineTo(-s * 0.6,  -s * 0.22);
+      g.lineTo(-s * 1.0,  -s * 0.22);
+      g.lineTo(-s * 1.0,   s * 0.22);
+      g.lineTo(-s * 0.6,   s * 0.22);
+      g.closePath();
+      g.fillPath();
+      g.strokePath();
+      // Wings — straighter (less swept) rectangle, sitting forward of mid.
+      g.beginPath();
+      g.moveTo( s * 0.1,  0);
+      g.lineTo(-s * 0.1,  s * 0.85);
+      g.lineTo(-s * 0.4,  s * 0.85);
+      g.lineTo(-s * 0.2,  0);
+      g.lineTo(-s * 0.4, -s * 0.85);
+      g.lineTo(-s * 0.1, -s * 0.85);
+      g.closePath();
+      g.fillPath();
+      g.strokePath();
+      // Prop discs — small darker circles on the wing leading edge to
+      // suggest engines + propellers, the visual hallmark of a turboprop.
+      g.fillStyle(0x202020, 0.85);
+      g.fillCircle(-s * 0.05,  s * 0.55, s * 0.13);
+      g.fillCircle(-s * 0.05, -s * 0.55, s * 0.13);
+      g.fillStyle(color, 1);
+      // Tail fin
+      g.beginPath();
+      g.moveTo(-s * 0.85, 0);
+      g.lineTo(-s * 1.0,  s * 0.4);
+      g.lineTo(-s * 1.05, s * 0.4);
+      g.lineTo(-s * 0.95, 0);
+      g.lineTo(-s * 1.05, -s * 0.4);
+      g.lineTo(-s * 1.0, -s * 0.4);
+      g.closePath();
+      g.fillPath();
+      g.strokePath();
+    } else if (cls === 'widebody') {
+      // Longer, fatter fuselage — wide-body jumbo silhouette.
+      g.beginPath();
+      g.moveTo( s * 1.4,  0);
+      g.lineTo(-s * 0.6,  s * 0.26);
+      g.lineTo(-s * 1.1,  s * 0.26);
+      g.lineTo(-s * 1.1, -s * 0.26);
+      g.lineTo(-s * 0.6, -s * 0.26);
+      g.closePath();
+      g.fillPath();
+      g.strokePath();
+      // Wings — bigger sweep, longer span.
+      g.beginPath();
+      g.moveTo( s * 0.1,  0);
+      g.lineTo(-s * 0.5,  s * 1.15);
+      g.lineTo(-s * 0.7,  s * 1.15);
+      g.lineTo(-s * 0.4,  0);
+      g.lineTo(-s * 0.7, -s * 1.15);
+      g.lineTo(-s * 0.5, -s * 1.15);
+      g.closePath();
+      g.fillPath();
+      g.strokePath();
+      // Engine pods — two darker ovals under each wing, signaling a quad
+      // jet visually even though most modern wide-bodies are twin-engine.
+      g.fillStyle(0x202020, 0.85);
+      g.fillEllipse(-s * 0.15,  s * 0.55, s * 0.32, s * 0.16);
+      g.fillEllipse(-s * 0.40,  s * 0.95, s * 0.28, s * 0.14);
+      g.fillEllipse(-s * 0.15, -s * 0.55, s * 0.32, s * 0.16);
+      g.fillEllipse(-s * 0.40, -s * 0.95, s * 0.28, s * 0.14);
+      g.fillStyle(color, 1);
+      // Tail fin — tall.
+      g.beginPath();
+      g.moveTo(-s * 0.95, 0);
+      g.lineTo(-s * 1.2,  s * 0.5);
+      g.lineTo(-s * 1.3,  s * 0.5);
+      g.lineTo(-s * 1.1,  0);
+      g.lineTo(-s * 1.3, -s * 0.5);
+      g.lineTo(-s * 1.2, -s * 0.5);
+      g.closePath();
+      g.fillPath();
+      g.strokePath();
+    } else {
+      // Narrowbody — the original baseline shape. Sleek pointed fuselage,
+      // swept M-shaped wings, modest tail fin.
+      g.beginPath();
+      g.moveTo( s * 1.2,  0);
+      g.lineTo(-s * 0.6,  s * 0.18);
+      g.lineTo(-s * 1.0,  s * 0.18);
+      g.lineTo(-s * 1.0, -s * 0.18);
+      g.lineTo(-s * 0.6, -s * 0.18);
+      g.closePath();
+      g.fillPath();
+      g.strokePath();
+      g.beginPath();
+      g.moveTo( s * 0.0,  0);
+      g.lineTo(-s * 0.4,  s * 0.95);
+      g.lineTo(-s * 0.6,  s * 0.95);
+      g.lineTo(-s * 0.3,  0);
+      g.lineTo(-s * 0.6, -s * 0.95);
+      g.lineTo(-s * 0.4, -s * 0.95);
+      g.closePath();
+      g.fillPath();
+      g.strokePath();
+      g.beginPath();
+      g.moveTo(-s * 0.85, 0);
+      g.lineTo(-s * 1.1,  s * 0.4);
+      g.lineTo(-s * 1.2,  s * 0.4);
+      g.lineTo(-s * 1.0,  0);
+      g.lineTo(-s * 1.2, -s * 0.4);
+      g.lineTo(-s * 1.1, -s * 0.4);
+      g.closePath();
+      g.fillPath();
+      g.strokePath();
+    }
     g.rotation = rotationRad;
     return g;
   }
