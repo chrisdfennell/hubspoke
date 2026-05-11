@@ -9,6 +9,57 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Visible AI rivals on your apron
+
+When a rival's route touches your active hub, their planes now
+actually appear there. They land via animation, sit briefly in a
+slim "visitor row" above the gate boxes in their airline color with
+a name label, then animate their takeoff back out. Completes the
+"alive airport" picture along with tarmac characters and the
+weekly newspaper.
+
+**Why a separate visitor row** — your numbered gate stalls are
+state we already manage tightly (`gateByPlaneId`, gate expansion,
+stable per-plane assignments). Mixing rival planes in would either
+require rewriting gate assignment to handle multi-player ownership
+or risk a rival hopping into a gate you'd assigned to one of yours.
+A separate row sidesteps both and reads more clearly visually —
+visiting planes are obviously visiting.
+
+**Implementation** ([AirportScene.ts](src/scenes/AirportScene.ts))
+
+- New `visitorLayer` container, drawn each frame by
+  `drawVisitingPlanes()`. Iterates every AI player's planes;
+  selects those that are idle at the active hub AND whose assigned
+  route actually touches it (a stale-routeId check, otherwise a
+  plane parked here by accident still renders). Caps at
+  `MAX_VISITORS = 4` so a dogpile doesn't overflow horizontally.
+  Each plane drawn at 0.7 scale in its owner's airline color, with
+  a small `Segoe UI 9px` airline name centered below.
+- New `checkRivalStatusChanges()` runs every frame, mirrors the
+  existing `checkStatusChanges` for the human's planes but iterates
+  all AI players and routes the animation through visitor-row
+  endpoints instead of your gates.
+- New `animateVisitorLanding(plane, owner)` and
+  `animateVisitorTakeoff(plane, owner)` — simpler than the human
+  versions (no BOARDING bar, no tarmac passengers — that flavor is
+  reserved for your own apron). Path: runway threshold ↔ visitor
+  slot. Owner's airline color used for the icon. Slot index
+  derived from a stable hash of the plane id so a plane's
+  arrival-slot and subsequent departure-slot match.
+- Per-rival `rivalStatuses` snapshot + `animatingRivalIds` set
+  follow the same pattern as the human's tracking, so the same
+  transition-edge logic that drove your animations now drives
+  rivals' too.
+
+**Tunables** — `VISITOR_Y = 568` (above gate boxes at apronY + 18,
+below the GATES label at apronY - 38), horizontal range
+`VISITOR_X_LEFT = 200` to `VISITOR_X_RIGHT = 1000` (slightly inset
+from your gate row at 120 / 1100 so visitor and gate slots don't
+line up exactly).
+
+---
+
 ## 2026-05-11 — Weekly newspaper modal
 
 Gives the just-shipped passenger feedback (and the rest of the news

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, COLORS } from '../config';
 import { GameState } from '../state/GameState';
 import { Plane } from '../state/Plane';
+import { Player } from '../state/Player';
 import { Tooltip } from '../ui/Tooltip';
 import { formatMoney } from '../systems/Clock';
 import { staffShortfall } from '../systems/Personnel';
@@ -64,6 +65,25 @@ export class AirportScene extends Phaser.Scene {
    *  inbound for the active hub — fills the visual gap between bursts. */
   private transitLayer!: Phaser.GameObjects.Container;
   private transitSig = '';
+  /** Rival planes visiting your active hub. Rendered in their airline color
+   *  with a name label, in a slim row above the gates (separate from your
+   *  numbered apron gates so visitor planes never conflict with your gate
+   *  assignments). */
+  private visitorLayer!: Phaser.GameObjects.Container;
+  private visitorSig = '';
+  /** Status snapshot of every rival plane the last time we polled — used
+   *  to detect idle→flying / flying→idle transitions affecting this hub
+   *  so we can animate visitor takeoffs/landings. */
+  private rivalStatuses: Record<string, string> = {};
+  /** Rival plane ids currently mid visitor-anim. Suppressed from the
+   *  visitor-row render so the parked icon doesn't double with the
+   *  animating icon. */
+  private animatingRivalIds = new Set<string>();
+  /** Visitor row y-coordinate (above the gate boxes, below the rooms). */
+  private readonly VISITOR_Y = 568;
+  private readonly VISITOR_X_LEFT = 200;
+  private readonly VISITOR_X_RIGHT = 1000;
+  private readonly MAX_VISITORS = 4;
   private tooltip!: Tooltip;
   /** Title strip — updated when activeHub changes so the airport reflects
    *  whichever hub the player is currently focused on. */
@@ -134,6 +154,7 @@ export class AirportScene extends Phaser.Scene {
     this.parkedLayer = this.add.container(0, 0);
     this.flightLayer = this.add.container(0, 0);
     this.transitLayer = this.add.container(0, 0);
+    this.visitorLayer = this.add.container(0, 0);
 
     // Initial gate-box layout. Subsequent hub-switches and gate purchases
     // are picked up by ensureGateLayout() in update().
@@ -168,7 +189,9 @@ export class AirportScene extends Phaser.Scene {
   update() {
     this.ensureGateLayout();
     this.checkStatusChanges();
+    this.checkRivalStatusChanges();
     this.drawParkedPlanes();
+    this.drawVisitingPlanes();
     this.drawInTransit();
     this.refreshTitleIfHubChanged();
   }
@@ -533,6 +556,208 @@ export class AirportScene extends Phaser.Scene {
       const icon = this.makePlaneIcon(this.gateXs[gateIdx], this.apronY, plane.model.seats, me.color, 0);
       this.parkedLayer.add(icon);
     }
+  }
+
+  // ----- Visiting rival planes -----
+
+  /**
+   * Render every rival plane that's currently idle AT YOUR active hub in a
+   * thin "visitor row" above the gate boxes — in their airline color, with
+   * a small name label below the icon, scaled down so it reads as "not
+   * one of yours." Caps at MAX_VISITORS so a dogpile (rival hub right
+   * next to yours) doesn't overflow horizontally; surplus visitors just
+   * aren't drawn this tick.
+   *
+   * Sig-cached so the layer only rebuilds when the visiting set changes.
+   */
+  private drawVisitingPlanes() {
+    const state = GameState.get();
+    const hub = state.activeHub;
+    type V = { plane: Plane; owner: Player };
+    const visitors: V[] = [];
+    for (const player of state.players) {
+      if (!player.isAI) continue;
+      for (const plane of player.planes) {
+        if (this.animatingRivalIds.has(plane.id)) continue;
+        if (plane.status.kind !== 'idle') continue;
+        if (plane.status.airportId !== hub) continue;
+        // Filter: this plane's assigned route must actually touch our hub.
+        // Without this, a plane that's parked at our hub due to a stale
+        // routeId would still render — confusing.
+        const route = plane.routeId
+          ? player.routes.find(r => r.id === plane.routeId)
+          : null;
+        if (!route || (route.fromCity !== hub && route.toCity !== hub)) continue;
+        visitors.push({ plane, owner: player });
+      }
+    }
+
+    const shown = visitors.slice(0, this.MAX_VISITORS);
+    const slotStep = shown.length <= 1
+      ? 0
+      : (this.VISITOR_X_RIGHT - this.VISITOR_X_LEFT) / (shown.length - 1);
+    const positions = shown.map((v, i) => ({
+      ...v,
+      x: shown.length === 1
+        ? (this.VISITOR_X_LEFT + this.VISITOR_X_RIGHT) / 2
+        : this.VISITOR_X_LEFT + i * slotStep,
+    }));
+
+    const sig = positions
+      .map(p => `${p.plane.id}@${p.x.toFixed(0)}|${p.owner.color}`)
+      .join('|');
+    if (sig === this.visitorSig) return;
+    this.visitorSig = sig;
+
+    this.visitorLayer.removeAll(true);
+    for (const p of positions) {
+      const icon = this.makePlaneIcon(
+        p.x, this.VISITOR_Y, p.plane.model.seats, p.owner.color, 0,
+      );
+      icon.setScale(0.7);
+      this.visitorLayer.add(icon);
+      const label = this.add.text(p.x, this.VISITOR_Y + 14, p.owner.name, {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '9px',
+        color: '#a0b0c4',
+      }).setOrigin(0.5, 0);
+      this.visitorLayer.add(label);
+    }
+  }
+
+  /** Poll all rival players' planes for status transitions that affect the
+   *  active hub. Mirrors checkStatusChanges() but routes the animation
+   *  through the visitor-row endpoints instead of your gates, and uses
+   *  the owning AI's airline color. */
+  private checkRivalStatusChanges() {
+    const state = GameState.get();
+    const hub = state.activeHub;
+    for (const player of state.players) {
+      if (!player.isAI) continue;
+      for (const plane of player.planes) {
+        const cur = plane.status.kind;
+        const prev = this.rivalStatuses[plane.id];
+        if (prev === undefined) {
+          this.rivalStatuses[plane.id] = cur;
+          continue;
+        }
+        if (prev === 'idle' && (cur === 'flying' || cur === 'cargo' || cur === 'ferry')) {
+          if ((plane.status.kind === 'flying' || plane.status.kind === 'cargo' || plane.status.kind === 'ferry')
+              && plane.status.from === hub) {
+            this.animateVisitorTakeoff(plane, player);
+          }
+        } else if ((prev === 'flying' || prev === 'cargo' || prev === 'ferry') && cur === 'idle') {
+          if (plane.status.kind === 'idle' && plane.status.airportId === hub) {
+            this.animateVisitorLanding(plane, player);
+          }
+        }
+        this.rivalStatuses[plane.id] = cur;
+      }
+    }
+  }
+
+  /** Rival plane departure from your hub. Taxis from a visitor slot to the
+   *  nearer runway end and exits. No BOARDING bar / no tarmac passengers —
+   *  that flavor is reserved for your own apron. */
+  private animateVisitorTakeoff(plane: Plane, owner: Player) {
+    // Pick a horizontal slot at the time of takeoff so the icon spawns near
+    // where the player saw it parked. Hash the plane id to a slot index for
+    // stability across this animation; if drawVisitingPlanes happens to put
+    // it at a different x next tick, the takeoff still reads cleanly.
+    const slotIdx = this.hashSlot(plane.id);
+    const startX = this.visitorSlotX(slotIdx);
+    // Exit toward whichever runway end is closer to keep the path natural.
+    const cx = (this.RUNWAY_LEFT + this.RUNWAY_RIGHT) / 2;
+    const exitsRight = startX >= cx;
+    const startRot = exitsRight ? 0 : Math.PI;
+    const thresholdX = exitsRight ? this.RUNWAY_LEFT + 50 : this.RUNWAY_RIGHT - 50;
+    const exitX = exitsRight ? GAME_WIDTH + 80 : -80;
+
+    this.animatingRivalIds.add(plane.id);
+    this.visitorSig = '';   // force visitor-row re-render now that this one's leaving
+
+    const icon = this.makePlaneIcon(startX, this.VISITOR_Y, plane.model.seats, owner.color, startRot);
+    icon.setScale(0.9);
+    this.flightLayer.add(icon);
+
+    this.tweens.add({
+      targets: icon,
+      x: thresholdX,
+      y: this.runwayY,
+      duration: this.a(1100),
+      ease: 'Sine.easeInOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: icon,
+          x: exitX,
+          duration: this.a(1200),
+          ease: 'Cubic.easeIn',
+          onComplete: () => {
+            icon.destroy();
+            this.animatingRivalIds.delete(plane.id);
+            this.visitorSig = '';
+          },
+        });
+      },
+    });
+  }
+
+  /** Rival plane arrival to your hub. Enters from a runway end, decelerates
+   *  to the threshold, then taxis up to a visitor slot. */
+  private animateVisitorLanding(plane: Plane, owner: Player) {
+    const slotIdx = this.hashSlot(plane.id);
+    const endX = this.visitorSlotX(slotIdx);
+    const cx = (this.RUNWAY_LEFT + this.RUNWAY_RIGHT) / 2;
+    const entersFromRight = endX >= cx;
+    const startX = entersFromRight ? GAME_WIDTH + 80 : -80;
+    const flightRot = entersFromRight ? Math.PI : 0;
+    const thresholdX = entersFromRight ? this.RUNWAY_LEFT + 50 : this.RUNWAY_RIGHT - 50;
+
+    this.animatingRivalIds.add(plane.id);
+    this.visitorSig = '';
+
+    const icon = this.makePlaneIcon(startX, this.runwayY, plane.model.seats, owner.color, flightRot);
+    icon.setScale(0.9);
+    this.flightLayer.add(icon);
+
+    this.tweens.add({
+      targets: icon,
+      x: thresholdX,
+      duration: this.a(1200),
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: icon,
+          x: endX,
+          y: this.VISITOR_Y,
+          rotation: 0,
+          duration: this.a(1000),
+          ease: 'Sine.easeInOut',
+          onComplete: () => {
+            icon.destroy();
+            this.animatingRivalIds.delete(plane.id);
+            this.visitorSig = '';
+          },
+        });
+      },
+    });
+  }
+
+  /** Stable slot index from a plane id. Deterministic so a takeoff exits
+   *  from the same x the landing parked at, even though we don't track an
+   *  explicit slot map. */
+  private hashSlot(planeId: string): number {
+    let h = 0;
+    for (let i = 0; i < planeId.length; i++) h = (h * 31 + planeId.charCodeAt(i)) | 0;
+    return Math.abs(h) % this.MAX_VISITORS;
+  }
+
+  private visitorSlotX(slotIdx: number): number {
+    if (this.MAX_VISITORS <= 1) {
+      return (this.VISITOR_X_LEFT + this.VISITOR_X_RIGHT) / 2;
+    }
+    const step = (this.VISITOR_X_RIGHT - this.VISITOR_X_LEFT) / (this.MAX_VISITORS - 1);
+    return this.VISITOR_X_LEFT + slotIdx * step;
   }
 
   // ----- Animations -----
