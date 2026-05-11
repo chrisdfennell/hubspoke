@@ -9,6 +9,26 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — ATR-72 range bump: 1,500 km → 4,500 km
+
+The ATR was undercutting itself as a "step up" plane — at 1,500 km it
+had *less* range than the Cessna 208 (1,900 km), so spending $18M on
+an ATR opened zero new destinations from a HNL home base. The next
+cities out from Honolulu — Pago Pago (4,200 km), Papeete (4,400 km),
+LAX (4,100 km), SFO (3,900 km) — were all out of reach until the
+player jumped straight to the $80M A220 or $92M B737.
+
+Bumped ATR range to **4,500 km** in [catalog.ts](src/state/catalog.ts).
+Now the mid-tier $18M / 70-seat plane can hit the natural next ring
+of routes out of Honolulu, restoring a meaningful three-tier
+progression: Cessna for local hops → ATR for medium-haul Pacific →
+A220/B737 for transcontinental.
+
+(Real ATR-72-600 range is ~1,500 km; this is a deliberate game-
+balance liberty, noted in the file comment.)
+
+---
+
 ## 2026-05-11 — Balance pass: starting cash, crew, repairs, sponsors
 
 Six tuning adjustments driven by play-feedback that the early game

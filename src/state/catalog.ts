@@ -44,7 +44,13 @@ export const PLANE_MODELS: PlaneModel[] = [
     price: 18_000_000,
     seats: 70,
     cargoCapacityKg: 7_500,
-    range: 1500,
+    // Real ATR-72-600 is ~1,500 km; bumped to 4,500 km so the plane is a
+    // meaningful step up from the Cessna 208 (1,900 km). At its real range
+    // it couldn't reach any of HNL's next-tier destinations (Pago Pago
+    // 4,200, Papeete 4,400, LAX 4,100, SFO 3,900) — players were forced to
+    // jump straight to the $80M A220 to unlock anything beyond the Hawaiian
+    // islands.
+    range: 4500,
     speed: 510,
     fuelPerKm: 4.5,
     maintenancePerHour: 100,
