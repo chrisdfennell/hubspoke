@@ -20,13 +20,63 @@ export type SoundName =
 
 const MUTE_KEY = 'airline-tycoon-mute';
 
+// ---- Music palettes ----
+// Frequencies are in Hz (equal-temperament). Each chord = list of notes
+// played as overlapping sine pad voices. Chord progressions loop; melody
+// notes are picked randomly from their pentatonic scale arrays.
+
+/** Airport lobby — A minor: Am → F → C → G. Loungey, slightly melancholic. */
+const AIRPORT_PROG: number[][] = [
+  [110.00, 220.00, 261.63, 329.63],  // Am   (A2 A3 C4 E4)
+  [ 87.31, 174.61, 220.00, 261.63],  // F    (F2 F3 A3 C4)
+  [ 65.41, 130.81, 164.81, 196.00],  // C    (C2 C3 E3 G3)
+  [ 98.00, 196.00, 246.94, 293.66],  // G    (G2 G3 B3 D4)
+];
+/** Control Tower / World Map — Dmin → Bbmaj → Fmaj → A7. Open and airy. */
+const WORLDMAP_PROG: number[][] = [
+  [ 73.42, 146.83, 220.00, 293.66],  // Dm   (D2 D3 A3 D4)
+  [116.54, 233.08, 293.66, 349.23],  // Bb   (Bb2 Bb3 D4 F4)
+  [ 87.31, 174.61, 261.63, 349.23],  // F    (F2 F3 C4 F4)
+  [110.00, 220.00, 277.18, 329.63],  // A    (A2 A3 C#4 E4)
+];
+/** Title screen — short brassy phrase. Cmaj → Am → Fmaj → G7. */
+const TITLE_PROG: number[][] = [
+  [130.81, 261.63, 329.63, 392.00],  // C
+  [110.00, 220.00, 261.63, 329.63],  // Am
+  [ 87.31, 174.61, 261.63, 349.23],  // F
+  [ 98.00, 196.00, 246.94, 293.66],  // G
+];
+/** Melodic scales (pentatonic — won't clash with any tonal chord). */
+const MELODY_PENTATONIC_A: number[] = [220, 261.63, 293.66, 329.63, 392, 440, 523.25, 587.33];
+const MELODY_PENTATONIC_C: number[] = [261.63, 293.66, 329.63, 392, 440, 523.25, 587.33, 659.25];
+
+/** Music track ids — each one is a different procedural composition. */
+export type MusicTrack = 'airport-lobby' | 'world-map' | 'title';
+
 class SoundManager {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private muted: boolean;
+  /** Music sub-bus: gain node sitting between music oscillators and the
+   *  master bus, so music volume can be set independently of SFX. */
+  private musicGain: GainNode | null = null;
+  /** Setting 0..1; lower than SFX so the loop doesn't fatigue. Saved with
+   *  the same localStorage key family as mute so it survives reloads. */
+  private musicVolume = 0.35;
+  /** setTimeout handles for the currently-scheduled music notes. Cleared
+   *  by stopMusic so chord/melody scheduling halts. */
+  private musicTimers: number[] = [];
+  /** Track currently playing (note scheduling active). */
+  private currentTrack: MusicTrack | null = null;
+  /** Last requested track — remembered across mutes so un-muting restarts
+   *  whatever the scene last asked for, without each scene needing to
+   *  hook the mute toggle. Cleared only by an explicit stopMusic(). */
+  private desiredTrack: MusicTrack | null = null;
 
   constructor() {
     this.muted = localStorage.getItem(MUTE_KEY) === '1';
+    const v = parseFloat(localStorage.getItem('airline-tycoon-music-vol') ?? '');
+    if (!Number.isNaN(v) && v >= 0 && v <= 1) this.musicVolume = v;
   }
 
   isMuted(): boolean { return this.muted; }
@@ -36,12 +86,29 @@ class SoundManager {
     if (m) localStorage.setItem(MUTE_KEY, '1');
     else   localStorage.removeItem(MUTE_KEY);
     if (this.masterGain) this.masterGain.gain.value = m ? 0 : 1;
+    // Halt music scheduling on mute (saves CPU on the silent loop) and
+    // restart on un-mute if a track was requested at any point.
+    if (m) {
+      this.haltMusicScheduling();
+    } else if (this.desiredTrack && !this.currentTrack) {
+      const t = this.desiredTrack;
+      this.desiredTrack = null;
+      this.startMusic(t);
+    }
   }
 
   toggleMuted(): boolean {
     this.setMuted(!this.muted);
     return this.muted;
   }
+
+  setMusicVolume(v: number) {
+    this.musicVolume = Math.max(0, Math.min(1, v));
+    localStorage.setItem('airline-tycoon-music-vol', this.musicVolume.toString());
+    if (this.musicGain) this.musicGain.gain.value = this.musicVolume;
+  }
+
+  getMusicVolume(): number { return this.musicVolume; }
 
   private ensureCtx(): AudioContext | null {
     if (this.muted) return null;
@@ -59,6 +126,122 @@ class SoundManager {
       this.ctx.resume().catch(() => {});
     }
     return this.ctx;
+  }
+
+  // ----- Music -----
+
+  /** Start (or switch to) a procedural music track. No-op if the requested
+   *  track is already playing. Safe to call repeatedly — internally it
+   *  stops any prior track before scheduling the new one. Called while
+   *  muted, the request is remembered (desiredTrack) and started when the
+   *  player un-mutes. */
+  startMusic(track: MusicTrack) {
+    this.desiredTrack = track;
+    if (this.currentTrack === track) return;
+    this.haltMusicScheduling();
+    const ctx = this.ensureCtx();
+    if (!ctx || !this.masterGain) return;
+    if (!this.musicGain) {
+      this.musicGain = ctx.createGain();
+      this.musicGain.gain.value = this.musicVolume;
+      this.musicGain.connect(this.masterGain);
+    }
+    this.currentTrack = track;
+    // Both tracks share the same chord-pad + sparse-melody structure;
+    // the chord palette and tempo are what give them distinct moods.
+    if (track === 'airport-lobby') {
+      this.scheduleChordLoop(ctx, AIRPORT_PROG, 4.0);
+      this.scheduleMelodyLoop(ctx, MELODY_PENTATONIC_A, 1500, 3000);
+    } else if (track === 'world-map') {
+      this.scheduleChordLoop(ctx, WORLDMAP_PROG, 6.0);
+      this.scheduleMelodyLoop(ctx, MELODY_PENTATONIC_C, 2200, 4500);
+    } else if (track === 'title') {
+      this.scheduleChordLoop(ctx, TITLE_PROG, 3.0);
+      this.scheduleMelodyLoop(ctx, MELODY_PENTATONIC_A, 1100, 2200);
+    }
+  }
+
+  /** Stop the current track AND forget the desired track. Use when leaving
+   *  to the title screen / game over — un-muting after this won't restart. */
+  stopMusic() {
+    this.haltMusicScheduling();
+    this.desiredTrack = null;
+  }
+
+  private haltMusicScheduling() {
+    for (const t of this.musicTimers) clearTimeout(t);
+    this.musicTimers = [];
+    this.currentTrack = null;
+    // Active oscillators fade out on their per-chord envelopes; we don't
+    // need to forcibly kill them. Worst case is a half-second tail.
+  }
+
+  /** Lay down one chord every chordDur seconds, looping over the palette.
+   *  Each chord is a small bundle of overlapping sine oscillators with
+   *  attack/release envelopes — sounds like a soft synth pad. */
+  private scheduleChordLoop(ctx: AudioContext, prog: number[][], chordDur: number) {
+    let idx = 0;
+    const playNext = () => {
+      if (this.currentTrack === null) return;
+      this.playChord(ctx, prog[idx % prog.length], chordDur);
+      idx++;
+      this.musicTimers.push(window.setTimeout(playNext, chordDur * 1000));
+    };
+    playNext();
+  }
+
+  private playChord(ctx: AudioContext, freqs: number[], durSec: number) {
+    if (!this.musicGain) return;
+    const now = ctx.currentTime;
+    const attack = 0.4;
+    const release = 0.6;
+    const peak = 0.06; // per-voice; sum stays comfortable for a 3-4 note chord
+    for (const freq of freqs) {
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(peak, now + attack);
+      gain.gain.setValueAtTime(peak, now + durSec - release);
+      gain.gain.linearRampToValueAtTime(0, now + durSec);
+      gain.connect(this.musicGain);
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      osc.connect(gain);
+      osc.start(now);
+      osc.stop(now + durSec + 0.05);
+    }
+  }
+
+  /** Schedule a sparse melodic note at random intervals within
+   *  [minMs, maxMs]. Pitch is randomly picked from a pentatonic palette
+   *  — guaranteed to never clash with the chord pad behind it. */
+  private scheduleMelodyLoop(ctx: AudioContext, scale: number[], minMs: number, maxMs: number) {
+    const playOne = () => {
+      if (this.currentTrack === null) return;
+      const freq = scale[Math.floor(Math.random() * scale.length)];
+      this.playMelodyNote(ctx, freq);
+      const next = minMs + Math.random() * (maxMs - minMs);
+      this.musicTimers.push(window.setTimeout(playOne, next));
+    };
+    // Small initial offset so the very first melody note doesn't land on
+    // beat 1 of the chord pad (would feel too "on" for an ambient track).
+    this.musicTimers.push(window.setTimeout(playOne, 1200));
+  }
+
+  private playMelodyNote(ctx: AudioContext, freq: number) {
+    if (!this.musicGain) return;
+    const now = ctx.currentTime;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.07, now + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.4);
+    gain.connect(this.musicGain);
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    osc.connect(gain);
+    osc.start(now);
+    osc.stop(now + 1.5);
   }
 
   play(name: SoundName) {

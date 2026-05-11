@@ -53,6 +53,9 @@ export class WorldMapScene extends Phaser.Scene {
     // Initialize filter visibility from current players (all on by default).
     for (const p of GameState.get().players) this.visible[p.id] = true;
 
+    // Switch to the airier Control Tower theme while the map is open.
+    sound.startMusic('world-map');
+
     // Dim background.
     this.add
       .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.55)
@@ -214,6 +217,8 @@ export class WorldMapScene extends Phaser.Scene {
 
   // ----- View / projection -----
   private close() {
+    // Return to the lobby theme as we close the map.
+    sound.startMusic('airport-lobby');
     this.scene.stop();
     this.scene.resume('AirportScene');
   }
@@ -452,6 +457,7 @@ export class WorldMapScene extends Phaser.Scene {
           if (!canAfford) return;
           me.cash -= cost;
           me.hubs.push(city.id);
+          state.stats.hubsBought++;
           state.pushNews(`${me.name} opened a new hub at ${city.name}.`);
           sound.play('buy');
           this.selectedCityId = null;

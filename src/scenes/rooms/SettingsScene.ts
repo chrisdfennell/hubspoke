@@ -3,6 +3,7 @@ import { COLORS } from '../../config';
 import { RoomScene } from '../../ui/RoomScene';
 import { Button } from '../../ui/Button';
 import { saveNow } from '../../systems/Save';
+import { sound } from '../../systems/Sound';
 
 /**
  * In-game settings panel. Toggles persist with the save (GameSnapshot.settings).
@@ -78,6 +79,37 @@ export class SettingsScene extends RoomScene {
 
     this.addText(left, y, 'Interface', 16, COLORS.accentText);
     y += 30;
+
+    // -- Music volume --
+    const musicVol = sound.getMusicVolume();
+    const musicLabel =
+      musicVol === 0 ? 'Off'
+      : musicVol < 0.25 ? 'Low'
+      : musicVol < 0.5  ? 'Medium'
+      : 'High';
+    this.addText(left, y, `Background music: ${musicLabel}`, 14);
+    this.addText(left + 8, y + 22,
+      'Procedural ambient loop. Mute (top-right speaker) silences everything; this knob trims just the music.',
+      11, COLORS.textDim);
+    const musicPresets: Array<{ label: string; value: number }> = [
+      { label: 'Off',    value: 0    },
+      { label: 'Low',    value: 0.15 },
+      { label: 'Medium', value: 0.35 },
+      { label: 'High',   value: 0.60 },
+    ];
+    this.addPresetRow(rightEdge, y + 14, musicPresets.length, (i) => {
+      const p = musicPresets[i];
+      const isActive = Math.abs(musicVol - p.value) < 0.01;
+      return {
+        label: p.label,
+        active: isActive,
+        onClick: () => {
+          sound.setMusicVolume(p.value);
+          this.rebuild();
+        },
+      };
+    });
+    y += 56;
 
     // -- Pause on room entry --
     this.addText(left, y, 'Auto-pause when entering a room', 14);

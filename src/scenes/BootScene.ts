@@ -12,6 +12,7 @@ import { registerCargoHooks, refreshOffers } from '../systems/Cargo';
 import { registerSabotageHooks } from '../systems/Sabotage';
 import { registerLoungeHooks, refreshContacts } from '../systems/Lounge';
 import { registerMilestoneHooks } from '../systems/Milestones';
+import { registerStatsHooks } from '../systems/Stats';
 import {
   registerAutoSave, saveNow, listSlots, loadSlot, deleteSlot, setActiveSlot,
   SlotInfo, MAX_SLOTS,
@@ -20,6 +21,7 @@ import { Button } from '../ui/Button';
 import { formatMoney } from '../systems/Clock';
 import { Difficulty, DIFFICULTIES } from '../state/Difficulty';
 import { CEOS } from '../state/ceos';
+import { sound } from '../systems/Sound';
 
 export class BootScene extends Phaser.Scene {
   constructor() { super('BootScene'); }
@@ -38,6 +40,7 @@ export class BootScene extends Phaser.Scene {
     registerSabotageHooks();
     registerLoungeHooks();
     registerMilestoneHooks();
+    registerStatsHooks();
 
     this.cameras.main.setBackgroundColor(COLORS.bg);
 
@@ -344,6 +347,11 @@ export class BootScene extends Phaser.Scene {
     refreshContacts();
     registerAutoSave();
     saveNow();
+    // Kick the airport music here (we're in a user-gesture click handler,
+    // so the AudioContext can be created/resumed). AirportScene.create()
+    // would also work but a few milliseconds later — starting here is
+    // tighter to the user's click.
+    sound.startMusic('airport-lobby');
     this.scene.start('AirportScene');
     this.scene.launch('HUDScene');
   }
