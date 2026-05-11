@@ -28,8 +28,13 @@ new Phaser.Game({
   height: GAME_HEIGHT,
   backgroundColor: COLORS.bg,
   scale: {
+    // Fit the 1280×800 internal resolution into the viewport, preserving
+    // aspect ratio. Centering is delegated to the #game flexbox in
+    // index.html — using Phaser's CENTER_BOTH at the same time double-
+    // centers (Phaser writes inline margins to the canvas, then the
+    // flexbox applies its own centering on top), which visibly shifts
+    // the game off-center.
     mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   scene: [
     BootScene,
