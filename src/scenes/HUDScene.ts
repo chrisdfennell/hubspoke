@@ -81,11 +81,15 @@ export class HUDScene extends Phaser.Scene {
     });
 
     // Speed indicator + system buttons. Speed text right-aligns so it tucks
-    // just left of the cluster; help (?), settings (⚙), and mute (🔊) sit on
-    // the right.
+    // just left of the cluster; stats (📊), help (?), pause / speeds, settings
+    // (⚙), and mute (🔊) sit on the right.
     this.speedText = this.add
-      .text(GAME_WIDTH - 310, 14, '', { fontFamily: 'Segoe UI', fontSize: '13px', color: COLORS.textDim })
+      .text(GAME_WIDTH - 350, 14, '', { fontFamily: 'Segoe UI', fontSize: '13px', color: COLORS.textDim })
       .setOrigin(1, 0);
+    this.makeSpeedButton(GAME_WIDTH - 330, 22, '📊', () => {
+      this.scene.pause('AirportScene');
+      this.scene.launch('StatsScene');
+    });
     this.makeSpeedButton(GAME_WIDTH - 290, 22, '?', () => {
       this.scene.pause('AirportScene');
       this.scene.launch('HelpScene');

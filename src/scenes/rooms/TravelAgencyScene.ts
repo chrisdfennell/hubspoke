@@ -153,6 +153,7 @@ export class TravelAgencyScene extends RoomScene {
           if (already) return;
           const r = new Route(me.id, activeCity.id, dest.id, dist, price);
           me.routes.push(r);
+          state.stats.routesOpened++;
           state.pushNews(`${me.name} opened route ${activeCity.name} ↔ ${dest.name}.`);
           sound.play('cashGain');
           this.rebuild();
@@ -188,20 +189,30 @@ export class TravelAgencyScene extends RoomScene {
       y += 20;
 
       this.addText(rightCol,       y, 'Ticket', 12, COLORS.textDim);
-      this.addText(rightCol + 80,  y, formatMoney(route.ticketPrice), 13);
-      this.addText(rightCol + 200, y, `Load factor: ${Math.round(lf * 100)}%`, 12, COLORS.textDim);
+      this.addText(rightCol + 80,  y, formatMoney(route.ticketPrice), 14, COLORS.accentText);
+      this.addText(rightCol + 280, y, `Load factor: ${Math.round(lf * 100)}%`, 12, COLORS.textDim);
 
-      // Price adjusters
-      const minus = new Button({
-        scene: this, x: rightCol + 360, y: y + 6, width: 28, height: 22, label: '−',
-        onClick: () => { route.ticketPrice = Math.max(20, route.ticketPrice - 10); this.rebuild(); },
-      });
-      const plus = new Button({
-        scene: this, x: rightCol + 392, y: y + 6, width: 28, height: 22, label: '+',
-        onClick: () => { route.ticketPrice = route.ticketPrice + 10; this.rebuild(); },
-      });
-      this.content.add(minus); this.content.add(plus);
-      y += 22;
+      // Price adjusters — four steps for fast or fine tuning. Sit right next
+      // to the ticket value so the relationship is obvious.
+      const priceBtns: Array<{ label: string; delta: number; offset: number }> = [
+        { label: '−$50', delta: -50, offset: 160 },
+        { label: '−$10', delta: -10, offset: 198 },
+        { label: '+$10', delta:  10, offset: 236 },
+        { label: '+$50', delta:  50, offset: 274 },
+      ];
+      for (const b of priceBtns) {
+        const btn = new Button({
+          scene: this,
+          x: rightCol + b.offset, y: y + 6, width: 36, height: 22,
+          label: b.label,
+          onClick: () => {
+            route.ticketPrice = Math.max(20, route.ticketPrice + b.delta);
+            this.rebuild();
+          },
+        });
+        this.content.add(btn);
+      }
+      y += 24;
 
       // Profit estimate vs assigned plane (or first eligible idle plane)
       const sample = assigned ?? me.planes.find(p =>

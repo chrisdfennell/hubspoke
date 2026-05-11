@@ -85,6 +85,13 @@ export class AirportScene extends Phaser.Scene {
    *  BOARDING phase so the player doesn't see a plane begin boarding while
    *  a sibling plane is still taxiing in. */
   private activeLandingEndsAt = new Map<string, number>();
+  /** Callbacks to fire when each in-flight landing animation completes,
+   *  keyed by plane id. Used for the same-plane case where a takeoff is
+   *  dispatched while THIS plane's own landing animation is still running
+   *  (turnaround cooldown shorter than landing-anim duration at 2×/4×
+   *  game speeds). Chaining off the landing's onComplete eliminates the
+   *  1-frame gap that delayedCall would introduce. */
+  private onLandingComplete = new Map<string, () => void>();
   /** Cap on how long a takeoff can wait for landings to finish. Without
    *  this, sustained 3-plane traffic at 4× speed produces a perpetually
    *  growing animation backlog. 4s = roughly one full takeoff cycle. */
@@ -221,21 +228,26 @@ export class AirportScene extends Phaser.Scene {
     const me = state.human;
     const hub = state.activeHub;
 
-    const flights: Array<{ direction: '→' | '←'; otherCity: string }> = [];
+    type Tag = { label: string; color: string };
+    const tags: Tag[] = [];
     for (const plane of me.planes) {
       const s = plane.status;
       if (s.kind === 'flying' || s.kind === 'cargo' || s.kind === 'ferry') {
-        if (s.from === hub) flights.push({ direction: '→', otherCity: s.to });
-        else if (s.to === hub) flights.push({ direction: '←', otherCity: s.from });
+        if (s.from === hub) tags.push({ label: `→ ${getCity(s.to).name}`, color: '#ffc857' });
+        else if (s.to === hub) tags.push({ label: `← ${getCity(s.from).name}`, color: '#7be08a' });
+      } else if (s.kind === 'maintenance' && s.airportId === hub) {
+        // Sabotage / mishap parked the plane in the shop — surface it so
+        // the player understands why an expected dispatch isn't happening.
+        tags.push({ label: `🔧 ${plane.name}`, color: '#ff9aa6' });
       }
     }
 
-    const sig = flights.map(f => `${f.direction}${f.otherCity}`).join('|');
+    const sig = tags.map(t => `${t.color}|${t.label}`).join('||');
     if (sig === this.transitSig) return;
     this.transitSig = sig;
 
     this.transitLayer.removeAll(true);
-    if (flights.length === 0) return;
+    if (tags.length === 0) return;
 
     const stripY = this.apronY + 45;
     const header = this.add.text(80, stripY, 'IN TRANSIT', {
@@ -247,12 +259,11 @@ export class AirportScene extends Phaser.Scene {
     this.transitLayer.add(header);
 
     let x = 170;
-    for (const f of flights) {
-      const cityName = getCity(f.otherCity).name;
-      const tag = this.add.text(x, stripY, `${f.direction} ${cityName}`, {
+    for (const t of tags) {
+      const tag = this.add.text(x, stripY, t.label, {
         fontFamily: 'Segoe UI, Tahoma, sans-serif',
         fontSize: '11px',
-        color: f.direction === '→' ? '#ffc857' : '#7be08a',
+        color: t.color,
       });
       this.transitLayer.add(tag);
       x += tag.width + 18;
@@ -442,6 +453,15 @@ export class AirportScene extends Phaser.Scene {
     }).setOrigin(0.5, 0);
   }
 
+  /** Scale an animation duration (in real-time ms) by the current game
+   *  speed. The same anim takes 2800 ms at 1×, 1400 ms at 2×, 700 ms at 4×.
+   *  This keeps the landing animation strictly shorter than the in-game
+   *  turnaround cooldown at every speed (14 game-min < 15 game-min), so
+   *  the plane is never in two visual states at once on a short route. */
+  private a(ms: number): number {
+    return Math.round(ms / GameState.get().speed);
+  }
+
   // ----- Status polling for animations -----
   private snapshotStatuses() {
     const me = GameState.get().human;
@@ -549,39 +569,42 @@ export class AirportScene extends Phaser.Scene {
     // Alternate runway end so neighboring gates don't trace the same path
     // when two planes take off near-simultaneously.
     const exitsRight = (gateIdx % 2) === 0;
-
-    this.animatingIds.add(plane.id);
     const startRot = exitsRight ? 0 : Math.PI;
-    const icon = this.makePlaneIcon(gateX, this.apronY, seats, me.color, startRot);
-    icon.setScale(1.3); // bigger during animation for visibility
-    this.flightLayer.add(icon);
-
     const thresholdX = exitsRight ? this.RUNWAY_LEFT + 50 : this.RUNWAY_RIGHT - 50;
     const exitX = exitsRight ? GAME_WIDTH + 80 : -80;
 
-    // If any sibling plane is still mid-LANDING animation, hold this
-    // takeoff until they're parked. Otherwise the player sees a plane
-    // start boarding/taxiing out while another plane is still on
-    // approach, which reads as "plane magically appears at gate while
-    // another one is coming in." The icon stays at the gate during the
-    // hold (visually indistinguishable from a parked plane).
-    const now = this.time.now;
-    let holdMs = 0;
-    for (const endsAt of this.activeLandingEndsAt.values()) {
-      holdMs = Math.max(holdMs, endsAt - now);
-    }
-    // Cap so sustained traffic at 4× game-speed can't queue takeoffs
-    // forever — animations are flavor, not a strict serialization.
-    holdMs = Math.max(0, Math.min(holdMs, this.TAKEOFF_HOLD_CAP_MS));
+    // Reserve the gate immediately (keeps gateByPlaneId from cleaning it
+    // up during the hold) but do NOT create the visible icon yet. At 2×/4×
+    // speeds the turnaround cooldown expires while this plane's own
+    // landing animation is still mid-taxi — creating the takeoff icon
+    // now would draw a second sprite at the same gate the landing icon
+    // is taxiing toward, and the player sees them "merge" into one plane.
+    this.animatingIds.add(plane.id);
 
-    this.time.delayedCall(holdMs, () => {
+    const startTakeoff = () => {
+      // State may have moved on while we held — at 4× speed the plane
+      // might already have completed another full cycle. Skip the anim
+      // entirely if so; the dispatch / land plumbing keeps the game
+      // state consistent regardless.
+      if (plane.status.kind !== 'flying'
+          || plane.status.from !== GameState.get().activeHub) {
+        this.animatingIds.delete(plane.id);
+        return;
+      }
+
+      const icon = this.makePlaneIcon(gateX, this.apronY, seats, me.color, startRot);
+      icon.setScale(1.3); // bigger during animation for visibility
+      this.flightLayer.add(icon);
+
       // Phase 0: BOARDING. Plane sits at gate while a small bar above it fills,
-      // selling the "passengers loading" beat before taxi starts.
+      // selling the "passengers loading" beat before taxi starts. Durations
+      // scale with game speed (see this.a) so the full takeoff cycle always
+      // fits inside the in-game turnaround window.
       const boarding = this.boardingProgress(gateX, this.apronY - 24, '#ffc857', 'BOARDING');
       this.tweens.add({
         targets: boarding.fill,
         scaleX: 1,
-        duration: 800,
+        duration: this.a(800),
         ease: 'Linear',
         onComplete: () => {
           boarding.destroy();
@@ -592,14 +615,14 @@ export class AirportScene extends Phaser.Scene {
             targets: icon,
             x: thresholdX,
             y: this.runwayY,
-            duration: 1000,
+            duration: this.a(1000),
             ease: 'Sine.easeInOut',
             onComplete: () => {
               // Phase 2: accelerate down the runway and exit.
               this.tweens.add({
                 targets: icon,
                 x: exitX,
-                duration: 1200,
+                duration: this.a(1200),
                 ease: 'Cubic.easeIn',
                 onComplete: () => {
                   icon.destroy();
@@ -610,7 +633,35 @@ export class AirportScene extends Phaser.Scene {
           });
         },
       });
-    });
+    };
+
+    // If THIS plane is still mid-landing, chain off its onComplete so the
+    // takeoff icon is created in the same callback that destroys the
+    // landing icon — eliminates any frame gap (which appeared on G1 at
+    // 2×/4× speeds because the turnaround cooldown is shorter than the
+    // 2.8s landing animation, so a delayedCall race could leave the
+    // gate empty for a frame between the two animations).
+    if (this.activeLandingEndsAt.has(plane.id)) {
+      this.onLandingComplete.set(plane.id, startTakeoff);
+      return;
+    }
+
+    // Other planes' landings still get a time-based hold (we don't have
+    // their onComplete to chain off without more wiring; the race they'd
+    // cause is just a visual one-off, not a same-gate merge).
+    const now = this.time.now;
+    let holdMs = 0;
+    for (const endsAt of this.activeLandingEndsAt.values()) {
+      holdMs = Math.max(holdMs, endsAt - now);
+    }
+    holdMs = Math.max(0, Math.min(holdMs, this.TAKEOFF_HOLD_CAP_MS));
+    if (holdMs > 0) {
+      this.time.delayedCall(holdMs, startTakeoff);
+    } else {
+      // No hold needed — run synchronously so the takeoff icon spawns in
+      // the same frame the parked icon is removed by drawParkedPlanes.
+      startTakeoff();
+    }
   }
 
   private animateLanding(plane: Plane) {
@@ -624,8 +675,10 @@ export class AirportScene extends Phaser.Scene {
     this.animatingIds.add(plane.id);
     // Publish the expected end-of-landing time so any pending takeoff
     // animations can hold their BOARDING phase until we're parked.
-    // 1200 (approach) + 1000 (taxi) + 600 (deplane) = 2800 ms.
-    this.activeLandingEndsAt.set(plane.id, this.time.now + 2800);
+    // Total 2800 ms (1200 + 1000 + 600), scaled by game speed so the
+    // animation ends before the 15 game-min turnaround does, regardless
+    // of speed (preserves the no-overlap invariant on short routes).
+    this.activeLandingEndsAt.set(plane.id, this.time.now + this.a(2800));
     const startX = entersFromRight ? GAME_WIDTH + 80 : -80;
     const flightRot = entersFromRight ? Math.PI : 0;
     const icon = this.makePlaneIcon(startX, this.runwayY, seats, me.color, flightRot);
@@ -640,7 +693,7 @@ export class AirportScene extends Phaser.Scene {
     this.tweens.add({
       targets: icon,
       x: thresholdX,
-      duration: 1200,
+      duration: this.a(1200),
       ease: 'Cubic.easeOut',
       onComplete: () => {
         // Phase 2: taxi to a gate and rotate to parked orientation.
@@ -649,7 +702,7 @@ export class AirportScene extends Phaser.Scene {
           x: gateX,
           y: this.apronY,
           rotation: 0,
-          duration: 1000,
+          duration: this.a(1000),
           ease: 'Sine.easeInOut',
           onComplete: () => {
             // Phase 3: DEPLANING. A short bar empties above the parked plane
@@ -661,13 +714,22 @@ export class AirportScene extends Phaser.Scene {
             this.tweens.add({
               targets: deplane.fill,
               scaleX: 0,
-              duration: 600,
+              duration: this.a(600),
               ease: 'Linear',
               onComplete: () => {
                 deplane.destroy();
                 icon.destroy();
                 this.animatingIds.delete(plane.id);
                 this.activeLandingEndsAt.delete(plane.id);
+                // Fire any takeoff that was chained off this landing's
+                // completion. Doing it here (same callback) means the new
+                // icon spawns before any drawParkedPlanes pass can run,
+                // so the gate doesn't visibly empty between phases.
+                const pending = this.onLandingComplete.get(plane.id);
+                if (pending) {
+                  this.onLandingComplete.delete(plane.id);
+                  pending();
+                }
               },
             });
           },
@@ -725,7 +787,7 @@ export class AirportScene extends Phaser.Scene {
       targets: t,
       alpha: 0,
       y: y - 18,
-      duration: 1800,
+      duration: this.a(1800),
       ease: 'Sine.easeIn',
       onComplete: () => t.destroy(),
     });

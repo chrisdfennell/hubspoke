@@ -8,6 +8,7 @@ import { clock } from './Clock';
 import { distanceKm, getCity } from '../state/catalog';
 import { Player } from '../state/Player';
 import { getCEO } from '../state/ceos';
+import { planeReputationPerFlight } from '../state/upgrades';
 
 /** Convert a GameDate to a comparable minute count since year 0. Simplified. */
 function dateToMinutes(d: GameDate): number {
@@ -153,6 +154,7 @@ function maybeMishap(player: Player, plane: Plane, passengers: number) {
     const idx = player.planes.indexOf(plane);
     if (idx >= 0) player.planes.splice(idx, 1);
     if (!player.isAI) {
+      state.stats.crashes++;
       state.pushNews(
         `★ ${plane.name} (${player.name}) crashed — ${passengers} pax. ` +
         `Aircraft lost, reputation −25, ${formatPaxLoss(paxLoss)} in claims.`,
@@ -169,6 +171,7 @@ function maybeMishap(player: Player, plane: Plane, passengers: number) {
     // player tops it up in the Workshop (or until auto-repair fires).
     plane.condition = Math.max(plane.condition, 0.5);
     if (!player.isAI) {
+      state.stats.incidents++;
       state.pushNews(
         `⚠ ${plane.name} declared an emergency landing — pax compensated ${formatPaxLoss(paxLoss)}, ` +
         `reputation −5, plane patched to 50%.`,
@@ -201,12 +204,30 @@ export function landArrivedPlanes() {
         }
         const result = flightProfit(plane, route);
         player.cash += result.profit;
+        // Career stat tracking — only for the human player; AI rivals
+        // don't need a stats screen.
+        if (!player.isAI) {
+          state.stats.flights++;
+          state.stats.passengers += result.passengers;
+          state.stats.km += route.distanceKm;
+          state.stats.revenue += result.revenue;
+          state.stats.fuel += result.fuel;
+          if (result.profit > state.stats.bestFlightProfit) state.stats.bestFlightProfit = result.profit;
+          if (result.profit < state.stats.worstFlightLoss)  state.stats.worstFlightLoss  = result.profit;
+        }
         // Per-flight wear: small. A Cessna doing 20-30 flights a day used to
         // lose 10-15% condition daily; now it loses 2-3%, so a plane lasts
         // roughly a month of heavy use before needing a serious overhaul.
         // Igor's CEO perk halves this decay rate.
         const decayMult = getCEO(player.ceoId)?.perks.conditionDecayMult ?? 1.0;
         plane.condition = Math.max(0, plane.condition - 0.001 * decayMult);
+        // Reputation drip from equipped livery/interior upgrades. A bare
+        // plane adds nothing; a gold-trim + business-cabin + AVOD plane
+        // gradually buys back rep on every successful arrival.
+        const repBump = planeReputationPerFlight(plane.upgrades);
+        if (repBump > 0) {
+          player.reputation = Math.min(100, player.reputation + repBump);
+        }
         plane.status = { kind: 'idle', airportId: arrivedAt };
         lastLandedAt[plane.id] = now;
         if (!player.isAI) {
@@ -278,9 +299,29 @@ export function dispatchFerry(player: Player, plane: Plane, toHubId: string): { 
   return { ok: true };
 }
 
+/** Release planes whose maintenance window has elapsed. Maintenance status
+ *  is set by Sabotage (incendiary / super-glue) — when doneAt is reached
+ *  the plane returns to idle at the same airport so it can dispatch again. */
+export function releaseMaintenancePlanes() {
+  const state = GameState.get();
+  const now = dateToMinutes(state.date);
+  for (const player of state.players) {
+    for (const plane of player.planes) {
+      if (plane.status.kind !== 'maintenance') continue;
+      if (now < plane.status.doneAt) continue;
+      const airportId = plane.status.airportId;
+      plane.status = { kind: 'idle', airportId };
+      if (!player.isAI) {
+        state.pushNews(`${plane.name} returned to service at ${getCity(airportId).name}.`);
+      }
+    }
+  }
+}
+
 export function registerFlightHooks() {
   clock.onTick(() => {
     landArrivedPlanes();
+    releaseMaintenancePlanes();
     dispatchIdlePlanes();
   });
   // Daily auto-repair sweep: gated by settings.autoRepairThreshold (0 = off).
