@@ -21,6 +21,13 @@ export interface DifficultySettings {
 
   /** Multiplier on the default loan APR. */
   loanAprMult: number;
+  /** Required monthly principal payment as a fraction of outstanding loan.
+   *  0 = interest-only forever (Easy mode). Hit 3 consecutive missed
+   *  monthly payments and creditors seize the airline. */
+  requiredPrincipalPct: number;
+  /** Floor on the monthly principal payment in $ — so a tiny loan still
+   *  has a meaningful obligation. Ignored when requiredPrincipalPct is 0. */
+  requiredPrincipalMin: number;
 
   /** Per-day chance a random event fires. */
   eventChance: number;
@@ -42,6 +49,8 @@ export const DIFFICULTIES: Record<Difficulty, DifficultySettings> = {
     aiSabotageChance: 0.02,
     loanAprMult:      0.7,
     eventChance:      0.15,
+    requiredPrincipalPct: 0,
+    requiredPrincipalMin: 0,
   },
   normal: {
     label: 'Normal',
@@ -54,6 +63,8 @@ export const DIFFICULTIES: Record<Difficulty, DifficultySettings> = {
     aiSabotageChance: 0.06,
     loanAprMult:      1.0,
     eventChance:      0.25,
+    requiredPrincipalPct: 0.05,
+    requiredPrincipalMin: 50_000,
   },
   hard: {
     label: 'Hard',
@@ -66,6 +77,8 @@ export const DIFFICULTIES: Record<Difficulty, DifficultySettings> = {
     aiSabotageChance: 0.10,
     loanAprMult:      1.3,
     eventChance:      0.35,
+    requiredPrincipalPct: 0.07,
+    requiredPrincipalMin: 75_000,
   },
   brutal: {
     label: 'Brutal',
@@ -78,6 +91,8 @@ export const DIFFICULTIES: Record<Difficulty, DifficultySettings> = {
     aiSabotageChance: 0.15,
     loanAprMult:      1.6,
     eventChance:      0.45,
+    requiredPrincipalPct: 0.10,
+    requiredPrincipalMin: 100_000,
   },
 };
 

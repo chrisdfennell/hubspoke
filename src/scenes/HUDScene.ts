@@ -354,11 +354,17 @@ export class HUDScene extends Phaser.Scene {
     const s = GameState.get();
     const human = s.human;
 
-    // Defeat: human taken over.
+    // Defeat: human taken over (by a rival airline OR creditors after 3
+    // missed monthly loan payments).
     if (s.takenOverBy[human.id]) {
       const acquirerId = s.takenOverBy[human.id];
-      const acquirer = s.players.find(p => p.id === acquirerId);
-      this.fireGameOver('defeat', `${acquirer?.name ?? 'A rival'} acquired your airline. Game over.`);
+      if (acquirerId === '_creditors_') {
+        this.fireGameOver('defeat',
+          `Creditors seized ${human.name} after three missed loan payments. Game over.`);
+      } else {
+        const acquirer = s.players.find(p => p.id === acquirerId);
+        this.fireGameOver('defeat', `${acquirer?.name ?? 'A rival'} acquired your airline. Game over.`);
+      }
       return;
     }
 

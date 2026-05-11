@@ -5,7 +5,7 @@ import { Button } from '../../ui/Button';
 import { formatMoney } from '../../systems/Clock';
 import {
   creditLimit, takeLoan, repayLoan, deposit, withdraw,
-  effectiveLoanApr, SAVINGS_APY, payOffLoanCombined,
+  effectiveLoanApr, SAVINGS_APY, payOffLoanCombined, monthlyPrincipalDue,
 } from '../../systems/Bank';
 
 export class BankScene extends RoomScene {
@@ -26,7 +26,28 @@ export class BankScene extends RoomScene {
     this.addText(left, y, `Outstanding loan: ${formatMoney(me.loan)}`, 14);
     y += 22;
     this.addText(left, y, `Credit limit: ${formatMoney(creditLimit(me))}    APR: ${(effectiveLoanApr(me) * 100).toFixed(1)}%`, 13, COLORS.textDim);
-    y += 30;
+    y += 22;
+
+    // Monthly obligation — Easy is interest-only so 0; other tiers require a
+    // principal payment on the 1st of every month. Surfaced here so the
+    // player can see what's coming + whether they're at risk of a missed
+    // payment cascade.
+    const monthlyDue = monthlyPrincipalDue(me);
+    if (monthlyDue > 0) {
+      const missed = me.missedLoanPayments;
+      const missedText = missed > 0
+        ? `   ⚠ ${missed} missed (${3 - missed} until creditors seize)`
+        : '';
+      const color = missed > 0 ? '#ff7b88' : COLORS.textDim;
+      this.addText(left, y,
+        `Monthly principal due: ${formatMoney(monthlyDue)} (1st of each month)${missedText}`,
+        13, color);
+      y += 22;
+    } else if (me.loan > 0) {
+      this.addText(left, y, 'Monthly principal due: — (interest only on this difficulty)', 13, COLORS.textDim);
+      y += 22;
+    }
+    y += 8;
 
     this.addText(left, y, 'Borrow:', 13, COLORS.textDim);
     const amounts = [100_000, 500_000, 1_000_000, 5_000_000];

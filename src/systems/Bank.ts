@@ -92,6 +92,88 @@ export function payOffLoanCombined(p: Player): number {
   return paid;
 }
 
+/** How much principal the human must pay on the first day of each month.
+ *  Returns 0 on Easy (interest-only forever). */
+export function monthlyPrincipalDue(p: Player): number {
+  if (p.loan <= 0) return 0;
+  const cfg = getDifficulty(GameState.get().difficulty);
+  if (cfg.requiredPrincipalPct <= 0) return 0;
+  const fromPct = p.loan * cfg.requiredPrincipalPct;
+  return Math.round(Math.max(fromPct, cfg.requiredPrincipalMin));
+}
+
+/**
+ * Charge the human's required monthly loan-principal payment. Called by the
+ * daily hook when `state.date.day === 1` (first day of new month). Tries
+ * cash first, then savings; any shortfall becomes a missed payment with a
+ * cascade of consequences. Three consecutive missed months and creditors
+ * seize the airline by setting `state.takenOverBy[human.id] = '_creditors_'`,
+ * which HUDScene picks up and routes into the existing game-over flow.
+ *
+ * No-op on Easy difficulty (`requiredPrincipalPct === 0`) and when the
+ * player has no outstanding loan.
+ */
+export function applyMonthlyLoanPayment(p: Player): void {
+  const due = monthlyPrincipalDue(p);
+  if (due <= 0) return;
+
+  const state = GameState.get();
+
+  // Try cash, then savings.
+  let paid = 0;
+  const fromCash = Math.min(p.cash, due);
+  if (fromCash > 0) {
+    p.cash -= fromCash;
+    p.loan -= fromCash;
+    paid += fromCash;
+  }
+  const remaining = due - paid;
+  if (remaining > 0 && p.savings > 0) {
+    const fromSavings = Math.min(p.savings, remaining);
+    p.savings -= fromSavings;
+    p.loan -= fromSavings;
+    paid += fromSavings;
+  }
+
+  const shortfall = due - paid;
+  if (shortfall <= 0) {
+    // Paid in full — clear the missed counter.
+    p.missedLoanPayments = 0;
+    if (!p.isAI) {
+      state.pushNews(`Monthly loan payment of ${formatMoneyShort(due)} paid in full.`);
+    }
+    return;
+  }
+
+  // Missed payment cascade. Late fee (5% of shortfall) gets added back to
+  // the loan principal, plus a small reputation hit.
+  const lateFee = Math.round(shortfall * 0.05);
+  p.loan += lateFee;
+  p.reputation = Math.max(0, p.reputation - 2);
+  p.missedLoanPayments = (p.missedLoanPayments ?? 0) + 1;
+
+  if (!p.isAI) {
+    const remainingChances = Math.max(0, 3 - p.missedLoanPayments);
+    const tail = remainingChances === 0
+      ? ' Creditors are seizing the airline.'
+      : `  ${remainingChances} missed payment${remainingChances === 1 ? '' : 's'} until creditors seize.`;
+    state.pushNews(
+      `⚠ Missed loan payment — short ${formatMoneyShort(shortfall)}. Late fee ${formatMoneyShort(lateFee)} added to principal.${tail}`,
+    );
+  }
+
+  if (p.missedLoanPayments >= 3 && !p.isAI) {
+    state.takenOverBy[p.id] = '_creditors_';
+  }
+}
+
+function formatMoneyShort(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000)     return `$${(n / 1_000).toFixed(0)}k`;
+  return `$${Math.round(n)}`;
+}
+
 /**
  * Apply the human's auto-deposit / auto-withdraw rules. Called from the
  * daily hook alongside interest. AI rivals don't use these — the human
@@ -135,9 +217,16 @@ export function applyDailyInterest() {
 
 export function registerBankHooks() {
   clock.onDay(() => {
+    const state = GameState.get();
     applyDailyInterest();
-    // Auto-rules run after interest so the post-interest cash position
-    // is what the threshold compares against.
-    applyAutoBank(GameState.get().human);
+    // First day of a new month — the day-listener fires AFTER the month
+    // rolled over, so date.day === 1 at this point exactly when a month
+    // just ended.
+    if (state.date.day === 1) {
+      applyMonthlyLoanPayment(state.human);
+    }
+    // Auto-rules run last so the post-everything cash position is what
+    // the thresholds compare against.
+    applyAutoBank(state.human);
   });
 }

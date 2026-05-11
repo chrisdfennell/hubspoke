@@ -53,6 +53,8 @@ export interface PlayerSnapshot {
   autoSaveAboveCash?: number;
   /** When > 0, daily hook auto-withdraws from savings to top cash up to this. */
   autoWithdrawBelowCash?: number;
+  /** Consecutive missed monthly loan payments. Hits 3 → creditors seize. */
+  missedLoanPayments?: number;
 }
 
 export class Player {
@@ -106,6 +108,10 @@ export class Player {
    *  funds, top cash up to (or as close as savings allows). Zero disables. */
   autoWithdrawBelowCash: number = 0;
 
+  /** Consecutive missed monthly loan principal payments. Resets to 0 on a
+   *  successful payment; at 3, the airline is seized by creditors. */
+  missedLoanPayments: number = 0;
+
   /** Number of apron gates available at the given hub. */
   gatesAt(hubId: string): number {
     return this.gateCounts[hubId] ?? STARTING_GATES;
@@ -147,6 +153,7 @@ export class Player {
       boostUsedOn: { ...this.boostUsedOn },
       autoSaveAboveCash: this.autoSaveAboveCash,
       autoWithdrawBelowCash: this.autoWithdrawBelowCash,
+      missedLoanPayments: this.missedLoanPayments,
     };
   }
 
@@ -172,6 +179,7 @@ export class Player {
     p.boostUsedOn = { ...(s.boostUsedOn ?? {}) };
     p.autoSaveAboveCash = s.autoSaveAboveCash ?? 0;
     p.autoWithdrawBelowCash = s.autoWithdrawBelowCash ?? 0;
+    p.missedLoanPayments = s.missedLoanPayments ?? 0;
     return p;
   }
 }

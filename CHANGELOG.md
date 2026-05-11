@@ -9,6 +9,54 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Required monthly loan principal (difficulty-scaled)
+
+Loans used to be interest-only forever — the daily-interest bleed
+was the only cost, and a player could carry max debt indefinitely
+with no urgency to pay it down. Now Normal+ difficulties charge a
+monthly principal payment on the 1st of every game-month, with a
+miss cascade that ends in creditors seizing the airline after three
+consecutive failures.
+
+**Difficulty scaling** ([Difficulty.ts](src/state/Difficulty.ts))
+- Easy: `0%` — interest-only forever (same as before).
+- Normal: `5%` of outstanding loan per month, $50k floor.
+- Hard: `7%`, $75k floor.
+- Brutal: `10%`, $100k floor.
+
+The difficulty picker card in BootScene now shows the loan
+obligation alongside the other tier stats so players know what
+they're signing up for.
+
+**Monthly tick** ([Bank.ts](src/systems/Bank.ts))
+- New `monthlyPrincipalDue(player)` returns the required amount for
+  the current difficulty.
+- New `applyMonthlyLoanPayment(player)` is called from the existing
+  daily hook when `state.date.day === 1` (day-listener fires after
+  the month rolls over, so day === 1 indicates a fresh month):
+  - Charges cash first, then dips into savings.
+  - Paid in full → `missedLoanPayments` resets to 0, news entry.
+  - Shortfall → late fee of 5% × shortfall added back to principal,
+    −2 reputation, `missedLoanPayments++`, ⚠ news warning showing
+    how many missed payments remain before seizure.
+  - 3 missed → `state.takenOverBy[human.id] = '_creditors_'`,
+    which the existing HUDScene game-over check picks up and routes
+    into the defeat flow with a creditor-specific message.
+
+**State** — new `missedLoanPayments` field on Player (defaults 0,
+persists with the save).
+
+**UI** ([BankScene.ts](src/scenes/rooms/BankScene.ts)) — Loans
+section now shows the monthly principal due alongside APR + credit
+limit. When the player has missed payments, the line turns red and
+counts down how many remain before seizure.
+
+Save compat: existing saves load with `missedLoanPayments = 0` (the
+default), and pick up the new monthly cycle on the next month
+rollover.
+
+---
+
 ## 2026-05-11 — Bank: combined pay-off + auto-rules
 
 Two additions to the Bank scene that turn it from a "look at the

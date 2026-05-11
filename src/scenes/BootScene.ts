@@ -234,7 +234,10 @@ export class BootScene extends Phaser.Scene {
         fontSize: '12px',
         color: COLORS.text,
       }).setOrigin(0, 0));
-      const stats = `Start cash ${formatMoney(cfg.startCash)}  ·  Crew ${cfg.startPilots}P/${cfg.startMechanics}M  ·  AI buy ${(cfg.aiBuyChance * 100).toFixed(0)}% / day  ·  Loan APR ×${cfg.loanAprMult.toFixed(1)}  ·  Events ${(cfg.eventChance * 100).toFixed(0)}% / day`;
+      const loanReq = cfg.requiredPrincipalPct > 0
+        ? `Loan: ${(cfg.requiredPrincipalPct * 100).toFixed(0)}% principal / month`
+        : 'Loan: interest only';
+      const stats = `Start cash ${formatMoney(cfg.startCash)}  ·  Crew ${cfg.startPilots}P/${cfg.startMechanics}M  ·  AI buy ${(cfg.aiBuyChance * 100).toFixed(0)}% / day  ·  ${loanReq}  ·  Events ${(cfg.eventChance * 100).toFixed(0)}% / day`;
       overlay.add(this.add.text(GAME_WIDTH / 2 - cardW / 2 + 18, cy + 18, stats, {
         fontFamily: 'Segoe UI, Tahoma, sans-serif',
         fontSize: '11px',
