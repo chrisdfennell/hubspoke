@@ -9,6 +9,35 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Tarmac passengers
+
+The single biggest "feels like Airline Tycoon" beat we were still missing:
+the apron now shows tiny stick-figure passengers walking between the gate
+and the plane during the boarding and deplane phases.
+
+**Implementation** ([AirportScene.ts](src/scenes/AirportScene.ts))
+- New `spawnPassengers(gateX, phase, totalDurMs)` helper streams 5 figures
+  along a single-file vertical track between the gate box and the parked
+  plane. Walks staggered across the phase duration so multiple passengers
+  are in transit at once. Color-matched to the existing label conventions
+  — gold (`#ffc857`) for boarding, green (`#7be08a`) for arrived.
+- New `makeStickFigure(x, y, color)` renders the figure as a head circle
+  + body line via Phaser Graphics, sized (~4 px tall) to fit cleanly
+  between the parked plane sprite at `apronY` and the gate box at
+  `apronY + 18` without overlapping either.
+- Wired into the existing animation phases:
+  - `animateTakeoff`'s BOARDING bar (`this.a(800)` ms) → gate → plane.
+  - `animateLanding`'s ARRIVED bar (`this.a(600)` ms) → plane → gate.
+- `totalDurMs` is the already-game-speed-scaled duration of the phase, so
+  at 4× speed the passenger stream compresses to match the shorter bar
+  rather than spilling past it. Per-figure walk duration floored at
+  `this.a(300)` ms so even at 4× they're not instantaneous flickers.
+
+Reads as "passengers boarding / deplaning" at the apron's scale; sells the
+gate phase as something happening rather than just a progress bar.
+
+---
+
 ## 2026-05-11 — GitHub Pages deployment
 
 Set up automated deploys to GitHub Pages so the game can actually be

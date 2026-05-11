@@ -601,6 +601,7 @@ export class AirportScene extends Phaser.Scene {
       // scale with game speed (see this.a) so the full takeoff cycle always
       // fits inside the in-game turnaround window.
       const boarding = this.boardingProgress(gateX, this.apronY - 24, '#ffc857', 'BOARDING');
+      this.spawnPassengers(gateX, 'boarding', this.a(800));
       this.tweens.add({
         targets: boarding.fill,
         scaleX: 1,
@@ -709,6 +710,7 @@ export class AirportScene extends Phaser.Scene {
             // before it disappears back into the parked-layer pool — sells the
             // "passengers off, plane resets" beat.
             const deplane = this.boardingProgress(gateX, this.apronY - 24, '#7be08a', 'ARRIVED');
+            this.spawnPassengers(gateX, 'arrived', this.a(600));
             // Bar starts full and drains.
             deplane.fill.scaleX = 1;
             this.tweens.add({
@@ -772,6 +774,60 @@ export class AirportScene extends Phaser.Scene {
       fill,
       destroy: () => { bg.destroy(); fill.destroy(); txt.destroy(); },
     };
+  }
+
+  /**
+   * Stream of small stick-figure passengers walking gate ↔ plane during the
+   * BOARDING (yellow, gate → plane) and ARRIVED (green, plane → gate) phases.
+   * Single-file vertical track at the gate column, 5 figures staggered across
+   * the supplied totalDurMs so several are in transit at once but no two
+   * overlap. totalDurMs is the already-game-speed-scaled duration of the
+   * phase so the stream finishes when the boarding/deplane bar finishes.
+   */
+  private spawnPassengers(
+    gateX: number,
+    phase: 'boarding' | 'arrived',
+    totalDurMs: number,
+  ): void {
+    const planeY = this.apronY - 2;
+    const gateY = this.apronY + 22;
+    const count = 5;
+    // Each figure walks for ~half the phase so multiple are in flight at once.
+    // Floor at the scaled minimum so even at 4× speed they're not instantaneous.
+    const eachDur = Math.max(this.a(300), Math.floor(totalDurMs * 0.5));
+    const stagger = Math.max(1, Math.floor((totalDurMs - eachDur) / (count - 1)));
+    const color = phase === 'boarding' ? 0xffc857 : 0x7be08a;
+
+    for (let i = 0; i < count; i++) {
+      const delay = i * stagger;
+      this.time.delayedCall(delay, () => {
+        const startY = phase === 'boarding' ? gateY : planeY;
+        const endY = phase === 'boarding' ? planeY : gateY;
+        const fig = this.makeStickFigure(gateX, startY, color);
+        this.flightLayer.add(fig);
+        this.tweens.add({
+          targets: fig,
+          y: endY,
+          duration: eachDur,
+          ease: 'Linear',
+          onComplete: () => fig.destroy(),
+        });
+      });
+    }
+  }
+
+  /** Tiny stick figure — head + body line. Sized to fit between a parked
+   *  plane (apronY) and the gate box (apronY + 18) without overlapping either. */
+  private makeStickFigure(x: number, y: number, color: number): Phaser.GameObjects.Graphics {
+    const g = this.add.graphics({ x, y });
+    g.fillStyle(color, 1);
+    g.fillCircle(0, -1.6, 1.3);
+    g.lineStyle(1.2, color, 1);
+    g.beginPath();
+    g.moveTo(0, -0.2);
+    g.lineTo(0, 2.6);
+    g.strokePath();
+    return g;
   }
 
   /** Small text label that fades after a beat — calls out takeoff/landing. */
