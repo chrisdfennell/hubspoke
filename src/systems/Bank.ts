@@ -65,6 +65,57 @@ export function withdraw(p: Player, amount: number): boolean {
   return true;
 }
 
+/**
+ * Pay off the player's loan using cash first, then dipping into savings if
+ * cash isn't enough. Returns the amount actually paid. If the player has
+ * neither cash nor savings, returns 0 and leaves state unchanged.
+ *
+ * Pairs with the Bank Scene's "Pay off in full" button so a player can
+ * clear a $5M loan when they have $2M cash + $4M savings without manually
+ * withdrawing first.
+ */
+export function payOffLoanCombined(p: Player): number {
+  if (p.loan <= 0) return 0;
+  let paid = 0;
+  const fromCash = Math.min(p.cash, p.loan);
+  if (fromCash > 0) {
+    p.cash -= fromCash;
+    p.loan -= fromCash;
+    paid += fromCash;
+  }
+  if (p.loan > 0 && p.savings > 0) {
+    const fromSavings = Math.min(p.savings, p.loan);
+    p.savings -= fromSavings;
+    p.loan -= fromSavings;
+    paid += fromSavings;
+  }
+  return paid;
+}
+
+/**
+ * Apply the human's auto-deposit / auto-withdraw rules. Called from the
+ * daily hook alongside interest. AI rivals don't use these — the human
+ * sets thresholds via the Bank's "Auto-rules" section.
+ *
+ * - autoSaveAboveCash > 0 moves any cash above the threshold into savings.
+ * - autoWithdrawBelowCash > 0 withdraws from savings (up to its balance)
+ *   to top cash back up toward the threshold.
+ *
+ * Skipped entirely when the loan is non-zero AND auto-rules would deposit
+ * — paying loan interest from savings doesn't make sense, so keeping cash
+ * available for the player to repay manually is the right default.
+ */
+export function applyAutoBank(p: Player): void {
+  if (p.autoSaveAboveCash > 0 && p.cash > p.autoSaveAboveCash) {
+    const excess = p.cash - p.autoSaveAboveCash;
+    deposit(p, excess);
+  }
+  if (p.autoWithdrawBelowCash > 0 && p.cash < p.autoWithdrawBelowCash && p.savings > 0) {
+    const needed = p.autoWithdrawBelowCash - p.cash;
+    withdraw(p, Math.min(needed, p.savings));
+  }
+}
+
 /** Daily interest tick — replaces the simpler one in Economy. APR is read
  *  per-player so CEO perks (Anita's 0.7× loan APR) actually save the human
  *  money on daily interest. */
@@ -83,5 +134,10 @@ export function applyDailyInterest() {
 }
 
 export function registerBankHooks() {
-  clock.onDay(() => applyDailyInterest());
+  clock.onDay(() => {
+    applyDailyInterest();
+    // Auto-rules run after interest so the post-interest cash position
+    // is what the threshold compares against.
+    applyAutoBank(GameState.get().human);
+  });
 }

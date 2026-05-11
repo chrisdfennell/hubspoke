@@ -49,6 +49,10 @@ export interface PlayerSnapshot {
    *  boost item was used. Cooldown is one game-day per item — keeps the
    *  player from buying ten Marketing Campaigns in a row to swing rep. */
   boostUsedOn?: Record<string, number>;
+  /** When > 0, daily hook auto-deposits any cash above this threshold. */
+  autoSaveAboveCash?: number;
+  /** When > 0, daily hook auto-withdraws from savings to top cash up to this. */
+  autoWithdrawBelowCash?: number;
 }
 
 export class Player {
@@ -95,6 +99,13 @@ export class Player {
   /** Per-boost-item last-use day, gating the daily cooldown in Duty Free. */
   boostUsedOn: Record<string, number> = {};
 
+  /** Auto-deposit threshold: any cash above this is moved to savings on the
+   *  daily hook. Zero disables the rule. */
+  autoSaveAboveCash: number = 0;
+  /** Auto-withdrawal threshold: if cash drops below this and savings has
+   *  funds, top cash up to (or as close as savings allows). Zero disables. */
+  autoWithdrawBelowCash: number = 0;
+
   /** Number of apron gates available at the given hub. */
   gatesAt(hubId: string): number {
     return this.gateCounts[hubId] ?? STARTING_GATES;
@@ -134,6 +145,8 @@ export class Player {
       gateCounts: { ...this.gateCounts },
       ceoId: this.ceoId,
       boostUsedOn: { ...this.boostUsedOn },
+      autoSaveAboveCash: this.autoSaveAboveCash,
+      autoWithdrawBelowCash: this.autoWithdrawBelowCash,
     };
   }
 
@@ -157,6 +170,8 @@ export class Player {
     p.gateCounts = { ...(s.gateCounts ?? {}) };
     p.ceoId = s.ceoId;
     p.boostUsedOn = { ...(s.boostUsedOn ?? {}) };
+    p.autoSaveAboveCash = s.autoSaveAboveCash ?? 0;
+    p.autoWithdrawBelowCash = s.autoWithdrawBelowCash ?? 0;
     return p;
   }
 }

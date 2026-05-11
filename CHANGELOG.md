@@ -9,6 +9,43 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Bank: combined pay-off + auto-rules
+
+Two additions to the Bank scene that turn it from a "look at the
+numbers" room into something you'd actually visit and configure.
+
+**Combined pay-off** ([Bank.ts](src/systems/Bank.ts) →
+`payOffLoanCombined`) — new helper drains cash first, then dips
+into savings to clear whatever's left of the loan. The Bank scene
+shows a green "Pay off loan in full (uses cash + savings)" button
+whenever `cash + savings >= loan`; an amber "Pay all available"
+button if you can't fully clear it but still want to put everything
+toward it. No more two-step withdraw-then-repay dance.
+
+**Auto-rules** ([Bank.ts](src/systems/Bank.ts) → `applyAutoBank`,
+wired into `registerBankHooks`) — two thresholds on Player:
+
+- `autoSaveAboveCash` — any cash above this value gets moved to
+  savings on the daily hook. Presets: Off / $1M / $5M / $10M /
+  $25M / $50M.
+- `autoWithdrawBelowCash` — if cash drops below this value, savings
+  tops it back up (up to the savings balance). Presets: Off /
+  $100K / $500K / $1M / $2M / $5M.
+
+Set in a new "Auto-rules" section at the bottom of the Bank scene.
+Both default Off; values persist with the save via the new
+optional fields on `PlayerSnapshot`. AI rivals don't use these —
+their finances are managed inline by `AI.ts`.
+
+Both rules apply *after* daily interest so the post-interest cash
+position is what the thresholds compare against. Net effect: a
+late-game player who's done growing their fleet can set
+`autoSaveAboveCash: $10M` and watch savings yield compound on the
+excess passively, instead of leaving idle cash in the checking
+account.
+
+---
+
 ## 2026-05-11 — Achievements / medals
 
 Unified achievement system that includes the four existing net-worth
