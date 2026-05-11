@@ -2,7 +2,7 @@ import { Player, PlayerSnapshot } from './Player';
 import { Plane } from './Plane';
 import { Route } from './Route';
 import { DEFAULT_AIRLINES, HOME_AIRPORT, getCity, getPlaneModel } from './catalog';
-import { getCEO, DEFAULT_CEO_ID } from './ceos';
+import { CEOS, getCEO, DEFAULT_CEO_ID } from './ceos';
 import { getFuelPrice, setFuelPrice } from '../systems/Economy';
 import { GameEvent } from '../systems/Events';
 import { snapshotModifiers, restoreModifiers } from './demandModifiers';
@@ -67,6 +67,45 @@ export const DEFAULT_SETTINGS: GameSettings = {
  *  Economy.migrateBalance() reads this to decide whether to rewrite legacy data. */
 export const CURRENT_BALANCE_VERSION = 2;
 
+/** Career stats for the human player. Read live in the Stats panel and on
+ *  game-over; recorded cumulatively across the run by the systems that
+ *  generate the underlying events (Flights, TravelAgencyScene, etc). */
+export interface GameStats {
+  flights: number;
+  passengers: number;
+  km: number;
+  revenue: number;
+  fuel: number;
+  /** Best single-flight profit (most positive). */
+  bestFlightProfit: number;
+  /** Worst single-flight result (most negative — biggest loss). */
+  worstFlightLoss: number;
+  crashes: number;
+  incidents: number;
+  routesOpened: number;
+  planesBought: number;
+  hubsBought: number;
+  daysPlayed: number;
+  peakNetWorth: number;
+}
+
+export const DEFAULT_STATS: GameStats = {
+  flights: 0,
+  passengers: 0,
+  km: 0,
+  revenue: 0,
+  fuel: 0,
+  bestFlightProfit: 0,
+  worstFlightLoss: 0,
+  crashes: 0,
+  incidents: 0,
+  routesOpened: 0,
+  planesBought: 0,
+  hubsBought: 0,
+  daysPlayed: 0,
+  peakNetWorth: 0,
+};
+
 export interface GameSnapshot {
   version: number;
   date: GameDate;
@@ -103,6 +142,8 @@ export interface GameSnapshot {
   activeHub?: string;
   /** Net-worth milestones the human has already crossed. */
   milestonesReached?: string[];
+  /** Career stats. Optional for backwards-compat with pre-stats saves. */
+  stats?: GameStats;
 }
 
 export const SAVE_VERSION = 1;
@@ -147,6 +188,10 @@ export class GameState {
    *  fires its news entry exactly once. */
   milestonesReached: string[] = [];
 
+  /** Career stats for the human. Updated cumulatively by Flights and the
+   *  room scenes; rendered in the Stats panel + game-over screen. */
+  stats: GameStats = { ...DEFAULT_STATS };
+
   static instance: GameState | null = null;
 
   static get(): GameState {
@@ -190,6 +235,7 @@ export class GameState {
     s.balanceVersion = snap.balanceVersion ?? 0;
     s.activeHub = snap.activeHub ?? HOME_AIRPORT;
     s.milestonesReached = [...(snap.milestonesReached ?? [])];
+    s.stats = { ...DEFAULT_STATS, ...(snap.stats ?? {}) };
     restoreModifiers(snap.demandModifiers);
     setFuelPrice(snap.fuelPrice);
     GameState.instance = s;
@@ -221,6 +267,7 @@ export class GameState {
       balanceVersion: this.balanceVersion,
       activeHub: this.activeHub,
       milestonesReached: [...this.milestonesReached],
+      stats: { ...this.stats },
     };
   }
 
@@ -277,21 +324,28 @@ export class GameState {
       this.stockPrices[a.id] = 50;
     }
 
-    // Apply CEO perks to the human. Starting cash + inventory are bootstrap
-    // concerns; the rest (repair discount, condition decay, duty-free mult,
-    // loan APR) is read live from ceos.ts by the respective systems.
-    const ceo = getCEO(ceoId) ?? getCEO(DEFAULT_CEO_ID);
-    if (ceo) {
-      this.human.ceoId = ceo.id;
-      if (ceo.perks.cashBonus) this.human.cash += ceo.perks.cashBonus;
+    // Assign CEOs and apply starting-cash + starting-inventory perks. The
+    // human picks theirs in the BootScene; each AI rival rolls a random one
+    // so they get the same fairness levers (loan APR, repair discount,
+    // condition decay slowdown, etc.) the human enjoys. The "live" perks
+    // (repair cost, decay, duty-free mult, loan APR) are read per-player
+    // by the respective systems from `getCEO(player.ceoId)`.
+    const humanCEO = getCEO(ceoId) ?? getCEO(DEFAULT_CEO_ID);
+    for (const player of this.players) {
+      const ceo = player.isAI
+        ? CEOS[Math.floor(Math.random() * CEOS.length)]
+        : humanCEO;
+      if (!ceo) continue;
+      player.ceoId = ceo.id;
+      if (ceo.perks.cashBonus) player.cash += ceo.perks.cashBonus;
       if (ceo.perks.startingInventory) {
         for (const [itemId, n] of Object.entries(ceo.perks.startingInventory)) {
-          this.human.inventory[itemId] = (this.human.inventory[itemId] ?? 0) + n;
+          player.inventory[itemId] = (player.inventory[itemId] ?? 0) + n;
         }
       }
     }
 
-    const ceoLabel = ceo ? ` — CEO: ${ceo.name}` : '';
+    const ceoLabel = humanCEO ? ` — CEO: ${humanCEO.name}` : '';
     this.pushNews(`Welcome to ${this.human.name}. Difficulty: ${cfg.label}${ceoLabel}.`);
   }
 }
