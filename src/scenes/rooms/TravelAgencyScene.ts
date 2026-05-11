@@ -232,6 +232,22 @@ export class TravelAgencyScene extends RoomScene {
         y += 18;
       }
 
+      // Lifetime tallies for this route — accumulated by Flights on every
+      // arrival. Helps the player evaluate which routes are actually pulling
+      // their weight when tuning ticket prices or deciding what to close.
+      if (route.lifetimeFlights > 0) {
+        const avgPax = route.lifetimePassengers / route.lifetimeFlights;
+        const avgLF = avgPax / (sample?.model.seats ?? 1);
+        const profitSign = route.lifetimeProfit >= 0 ? '+' : '';
+        const lifeColor = route.lifetimeProfit >= 0 ? COLORS.textDim : '#ff9aa6';
+        this.addText(
+          rightCol, y,
+          `Lifetime: ${route.lifetimeFlights} flights · ${route.lifetimePassengers.toLocaleString('en-US')} pax (avg LF ${Math.round(avgLF * 100)}%) · ${profitSign}${formatMoney(route.lifetimeProfit)} profit`,
+          11, lifeColor,
+        );
+        y += 18;
+      }
+
       // Assignment row
       this.addText(rightCol, y, 'Assigned plane:', 12, COLORS.textDim);
       this.addText(rightCol + 110, y, assigned ? assigned.name : '— none —', 13, assigned ? COLORS.text : COLORS.textDim);

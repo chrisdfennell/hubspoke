@@ -9,6 +9,48 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Apron condition warnings + per-route lifetime stats
+
+Two polish wins paired up.
+
+**Apron condition warnings**
+([AirportScene.ts](src/scenes/AirportScene.ts))
+- Every parked plane now shows a `⚠` badge next to its id label when
+  its condition drops below 50%. Two tiers:
+  - **Yellow** (`#ffd44a`) between 30%–50% — caution. Mid-flight
+    failure odds kick in below 50% so this is the "you should think
+    about maintenance" tier.
+  - **Red** (`#ff6644`) below 30% — critical. Crashes get
+    increasingly likely.
+- Threshold-based via a new `conditionTier(condition)` helper. The
+  parked-layer signature now folds in `tier` so a per-flight 0.1%
+  drip doesn't force a rebuild every flight — only when crossing a
+  30%/50% threshold.
+- Pairs with the existing plane numbering: a plane reads as
+  `P3 ⚠` when it needs work, glanceable from the apron without
+  opening Workshop.
+
+**Per-route lifetime stats**
+([Route.ts](src/state/Route.ts), [Flights.ts](src/systems/Flights.ts),
+[TravelAgencyScene.ts](src/scenes/rooms/TravelAgencyScene.ts))
+- New fields on Route: `lifetimeFlights`, `lifetimePassengers`,
+  `lifetimeRevenue`, `lifetimeFuel`, `lifetimeProfit`. Bumped on
+  every successful arrival in `Flights.landArrivedPlanes` for the
+  owner (so AI routes track too).
+- Optional in `RouteSnapshot` for save-compat; pre-tracking routes
+  load with all zeros and start accumulating immediately.
+- Travel Agency route detail panel gains a "Lifetime" line below
+  the per-flight profit estimate showing `N flights · M pax (avg
+  LF X%) · ±$profit`. Hidden until the route has at least one
+  arrival so freshly-opened routes don't show "0 / 0 / 0%". Profit
+  text turns red when net negative.
+
+Pairs with the plane catalog rebalance — players can now see
+which routes are actually carrying their weight when deciding
+which plane to assign or whether to close an underperformer.
+
+---
+
 ## 2026-05-11 — Plane catalog audit: fix broken B737, A320neo, Q400 niches
 
 Full pass through `PLANE_MODELS` after the ATR range bump exposed three

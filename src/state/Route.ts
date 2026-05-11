@@ -18,6 +18,13 @@ export interface RouteSnapshot {
   toCity: string;
   distanceKm: number;
   ticketPrice: number;
+  /** Lifetime tallies — accumulated per successful arrival of the owner.
+   *  Optional in snapshot for save-compat with pre-tracking routes. */
+  lifetimeFlights?: number;
+  lifetimePassengers?: number;
+  lifetimeRevenue?: number;
+  lifetimeFuel?: number;
+  lifetimeProfit?: number;
 }
 
 export class Route {
@@ -30,6 +37,13 @@ export class Route {
   distanceKm: number;
   /** Airline id (owner). */
   ownerId: string;
+
+  /** Lifetime tallies — bumped on every successful arrival by Flights. */
+  lifetimeFlights: number = 0;
+  lifetimePassengers: number = 0;
+  lifetimeRevenue: number = 0;
+  lifetimeFuel: number = 0;
+  lifetimeProfit: number = 0;
 
   constructor(ownerId: string, fromCity: string, toCity: string, distanceKm: number, ticketPrice: number) {
     this.id = newRouteId();
@@ -48,6 +62,11 @@ export class Route {
       toCity: this.toCity,
       distanceKm: this.distanceKm,
       ticketPrice: this.ticketPrice,
+      lifetimeFlights: this.lifetimeFlights,
+      lifetimePassengers: this.lifetimePassengers,
+      lifetimeRevenue: this.lifetimeRevenue,
+      lifetimeFuel: this.lifetimeFuel,
+      lifetimeProfit: this.lifetimeProfit,
     };
   }
 
@@ -59,6 +78,11 @@ export class Route {
     r.toCity = s.toCity;
     r.distanceKm = s.distanceKm;
     r.ticketPrice = s.ticketPrice;
+    r.lifetimeFlights    = s.lifetimeFlights    ?? 0;
+    r.lifetimePassengers = s.lifetimePassengers ?? 0;
+    r.lifetimeRevenue    = s.lifetimeRevenue    ?? 0;
+    r.lifetimeFuel       = s.lifetimeFuel       ?? 0;
+    r.lifetimeProfit     = s.lifetimeProfit     ?? 0;
     const num = parseInt(s.id.replace(/[^0-9]/g, ''), 10);
     if (!isNaN(num)) setRouteIdCounter(num + 1);
     return r;

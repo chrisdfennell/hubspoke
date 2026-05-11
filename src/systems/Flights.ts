@@ -206,6 +206,14 @@ export function landArrivedPlanes() {
         }
         const result = flightProfit(plane, route);
         player.cash += result.profit;
+        // Per-route lifetime tallies — every owner accumulates, so the
+        // Travel Agency route-detail panel and any future analytics have
+        // accurate per-route data regardless of who's flying it.
+        route.lifetimeFlights    += 1;
+        route.lifetimePassengers += result.passengers;
+        route.lifetimeRevenue    += result.revenue;
+        route.lifetimeFuel       += result.fuel;
+        route.lifetimeProfit     += result.profit;
         // Career stat tracking — only for the human player; AI rivals
         // don't need a stats screen.
         if (!player.isAI) {

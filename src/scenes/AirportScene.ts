@@ -562,14 +562,21 @@ export class AirportScene extends Phaser.Scene {
     // Lazily assign a stable gate to any newly-parked plane.
     for (const plane of idle) this.gateIndexFor(plane);
 
-    const tuples: Array<{ plane: Plane; gateIdx: number }> =
-      idle.map(p => ({ plane: p, gateIdx: this.gateByPlaneId.get(p.id)! }));
-    const sig = tuples.map(t => `${t.plane.id}@${t.gateIdx}`).join('|');
+    const tuples: Array<{ plane: Plane; gateIdx: number; tier: number }> =
+      idle.map(p => ({
+        plane: p,
+        gateIdx: this.gateByPlaneId.get(p.id)!,
+        tier: conditionTier(p.condition),
+      }));
+    // Tier is included in the sig so crossing a 30%/50% threshold rebuilds
+    // the layer to show/hide the warning badge — but small per-flight
+    // condition drops within a tier don't trigger a rebuild every flight.
+    const sig = tuples.map(t => `${t.plane.id}@${t.gateIdx}#${t.tier}`).join('|');
     if (sig === this.parkedSig) return;
 
     this.parkedSig = sig;
     this.parkedLayer.removeAll(true);
-    for (const { plane, gateIdx } of tuples) {
+    for (const { plane, gateIdx, tier } of tuples) {
       const x = this.gateXs[gateIdx];
       const icon = this.makePlaneIcon(x, this.apronY, plane.model.seats, me.color, 0);
       this.parkedLayer.add(icon);
@@ -585,6 +592,21 @@ export class AirportScene extends Phaser.Scene {
         fontStyle: 'bold',
       }).setOrigin(0.5);
       this.parkedLayer.add(idLabel);
+
+      // Condition warning badge — sits just to the right of the id label,
+      // sized to match. Yellow caution at 30-50% (mid-flight failure odds
+      // kick in below 50%), red critical below 30%.
+      if (tier > 0) {
+        const badgeColor = tier === 2 ? '#ff6644' : '#ffd44a';
+        const badgeX = x + idLabel.width / 2 + 4;
+        const badge = this.add.text(badgeX, this.apronY - 14, '⚠', {
+          fontFamily: 'Segoe UI, Tahoma, sans-serif',
+          fontSize: '10px',
+          color: badgeColor,
+          fontStyle: 'bold',
+        }).setOrigin(0, 0.5);
+        this.parkedLayer.add(badge);
+      }
     }
   }
 
@@ -1227,6 +1249,15 @@ function daylightAt(t: number): { color: number; alpha: number; lightsAlpha: num
     alpha: a[2] + (b[2] - a[2]) * fr,
     lightsAlpha: a[3] + (b[3] - a[3]) * fr,
   };
+}
+
+/** Bucket plane condition into a tier so the parked-layer signature only
+ *  changes when crossing a meaningful threshold, not on every per-flight
+ *  drip. 0 = healthy, 1 = caution (mishap-eligible), 2 = critical. */
+function conditionTier(condition: number): number {
+  if (condition < 0.30) return 2;
+  if (condition < 0.50) return 1;
+  return 0;
 }
 
 function lerpColor(c1: number, c2: number, t: number): number {
