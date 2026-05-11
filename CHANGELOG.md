@@ -9,6 +9,55 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Workshop silhouettes + big-purchase confirm + tutorial banner
+
+Three polish wins bundled together.
+
+**Workshop buy list silhouettes**
+([WorkshopScene.ts](src/scenes/rooms/WorkshopScene.ts),
+[PlaneIcon.ts](src/ui/PlaneIcon.ts))
+- Refactored the plane-icon drawing out of `AirportScene` into a
+  shared `src/ui/PlaneIcon.ts` so any scene can render the same
+  class-differentiated silhouettes without copy-pasting 120 lines of
+  Graphics calls. AirportScene's local method is now a thin
+  one-liner delegating to the shared helper.
+- Workshop's buy list now shows the airline-colored silhouette of
+  each model in a new 50 px column at the row's left. Turboprops,
+  narrowbodies, and widebodies are visibly different — the buy
+  experience is finally visual instead of pure text.
+- The `withShadow` option on the shared helper (default true) is
+  set false for list rendering so a soft drop shadow doesn't smear
+  under the tabular row backgrounds.
+
+**Confirm modal for $50M+ purchases**
+([WorkshopScene.ts](src/scenes/rooms/WorkshopScene.ts))
+- Buying any plane priced ≥ $50M (B737, A320neo, A220, B747, A380)
+  now pops a `Modal.confirm` with the plane name, price, and
+  cash-after-purchase line. Cheaper planes (Cessna, ATR, Q400)
+  skip the confirm so the early-game buy flow doesn't feel naggy.
+- Saves a B747 misclick from burning $240M.
+
+**First-run tutorial banner**
+([Tutorial.ts](src/systems/Tutorial.ts),
+[TutorialBanner.ts](src/ui/TutorialBanner.ts))
+- Three-step onboarding shown as a slim banner below the HUD bar:
+  1. **Welcome** — click WORKSHOP to buy a plane.
+  2. **Plane bought** — click TRAVEL AGENCY to open a route.
+  3. **Route opened** — watch the apron for the takeoff.
+- Each step auto-advances when its goal is met (live state check
+  per HUDScene tick: `planes.length > 0` → `routes.length > 0` →
+  `stats.flights > 0`). No "next" button needed — playing the game
+  IS the next button.
+- Banner has a "Skip" button that sets a localStorage flag so the
+  player never sees it again.
+- `BootScene.go()` auto-dismisses for loaded saves that already
+  have flights flown, so resuming an existing run doesn't pop a
+  pointless banner.
+- Floats below the HUD bar (y=60), gold-accent stroke matching the
+  milestone popup, depth 100 so it sits above any open room.
+
+---
+
 ## 2026-05-11 — Differentiated plane silhouettes + SFX pass
 
 Two polish wins paired up.

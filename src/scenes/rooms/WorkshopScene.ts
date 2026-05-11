@@ -10,6 +10,11 @@ import { getFuelPrice } from '../../systems/Economy';
 import { sound } from '../../systems/Sound';
 import { getCEO } from '../../state/ceos';
 import { UPGRADES, UpgradeCategory, getUpgrade } from '../../state/upgrades';
+import { makePlaneIcon } from '../../ui/PlaneIcon';
+
+/** Threshold above which buying a plane prompts a confirmation modal —
+ *  a B747 / A380 misclick is real money down the drain otherwise. */
+const BIG_PURCHASE_THRESHOLD = 50_000_000;
 
 export class WorkshopScene extends RoomScene {
   /** When set, the Workshop renders a focused "Outfit" view for that
@@ -44,46 +49,72 @@ export class WorkshopScene extends RoomScene {
     this.addText(left, y, `Cash: ${formatMoney(me.cash)}`, 16, me.cash < 0 ? '#ff7b88' : COLORS.accentText);
     y += 36;
 
-    // Column headers
-    this.addText(left,        y, 'Model',    12, COLORS.textDim);
-    this.addText(left + 240,  y, 'Seats',    12, COLORS.textDim);
-    this.addText(left + 310,  y, 'Range',    12, COLORS.textDim);
-    this.addText(left + 400,  y, 'Speed',    12, COLORS.textDim);
-    this.addText(left + 490,  y, 'Fuel/km',  12, COLORS.textDim);
-    this.addText(left + 580,  y, 'Price',    12, COLORS.textDim);
+    // Column headers — shifted right by the silhouette column width.
+    const ICON_COL = 50;
+    this.addText(left + ICON_COL,       y, 'Model',    12, COLORS.textDim);
+    this.addText(left + ICON_COL + 240, y, 'Seats',    12, COLORS.textDim);
+    this.addText(left + ICON_COL + 310, y, 'Range',    12, COLORS.textDim);
+    this.addText(left + ICON_COL + 400, y, 'Speed',    12, COLORS.textDim);
+    this.addText(left + ICON_COL + 490, y, 'Fuel/km',  12, COLORS.textDim);
+    this.addText(left + ICON_COL + 580, y, 'Price',    12, COLORS.textDim);
     y += 22;
 
     for (const m of PLANE_MODELS) {
-      const nameTxt   = this.addText(left,       y + 6, m.name, 13);
-      const seatsTxt  = this.addText(left + 240, y + 6, `${m.seats}`, 13);
-      const rangeTxt  = this.addText(left + 310, y + 6, `${m.range} km`, 13);
-      const speedTxt  = this.addText(left + 400, y + 6, `${m.speed} km/h`, 13);
-      const fuelTxt   = this.addText(left + 490, y + 6, `${m.fuelPerKm.toFixed(1)} L`, 13);
-      const priceTxt  = this.addText(left + 580, y + 6, formatMoney(m.price), 13);
+      // Class-differentiated silhouette in the player's airline color,
+      // so the buy list shows visual variety instead of being pure text.
+      // Centered in a 50-px column at the row's left.
+      const icon = makePlaneIcon(
+        this, left + 22, y + 16, m.seats, me.color, 0, m.cls, /* shadow */ false,
+      );
+      this.content.add(icon);
+
+      const nameTxt   = this.addText(left + ICON_COL,       y + 6, m.name, 13);
+      const seatsTxt  = this.addText(left + ICON_COL + 240, y + 6, `${m.seats}`, 13);
+      const rangeTxt  = this.addText(left + ICON_COL + 310, y + 6, `${m.range} km`, 13);
+      const speedTxt  = this.addText(left + ICON_COL + 400, y + 6, `${m.speed} km/h`, 13);
+      const fuelTxt   = this.addText(left + ICON_COL + 490, y + 6, `${m.fuelPerKm.toFixed(1)} L`, 13);
+      const priceTxt  = this.addText(left + ICON_COL + 580, y + 6, formatMoney(m.price), 13);
       const tip = () => this.modelTooltip(m);
       [nameTxt, seatsTxt, rangeTxt, speedTxt, fuelTxt, priceTxt].forEach(t => this.tooltip.attach(t, tip));
 
       const canAfford = me.cash >= m.price;
+      const doBuy = () => {
+        if (me.cash < m.price) return;
+        me.cash -= m.price;
+        // Park the new plane at the hub the player is currently focused on,
+        // not the global default — fixes a multi-hub bug where a London-
+        // operator buying a plane would find it sitting in Honolulu.
+        const home = state.activeHub;
+        const plane = new Plane(m.id, home);
+        me.planes.push(plane);
+        state.stats.planesBought++;
+        state.pushNews(`${me.name} purchased a ${m.name} (${plane.name}) at ${getCity(home).name}.`);
+        sound.play('buy');
+        this.rebuild();
+      };
       const btn = new Button({
         scene: this,
-        x: left + 760,
+        x: left + ICON_COL + 760,
         y: y + 14,
         width: 110,
         height: 28,
         label: canAfford ? 'Buy' : 'Too expensive',
         onClick: () => {
           if (me.cash < m.price) return;
-          me.cash -= m.price;
-          // Park the new plane at the hub the player is currently focused on,
-          // not the global default — fixes a multi-hub bug where a London-
-          // operator buying a plane would find it sitting in Honolulu.
-          const home = state.activeHub;
-          const plane = new Plane(m.id, home);
-          me.planes.push(plane);
-          state.stats.planesBought++;
-          state.pushNews(`${me.name} purchased a ${m.name} (${plane.name}) at ${getCity(home).name}.`);
-          sound.play('buy');
-          this.rebuild();
+          // Confirm modal for big purchases — a B747 misclick is $240M down
+          // the drain otherwise. Cheaper planes (Cessna, ATR) skip the
+          // confirm so the early game doesn't feel naggy.
+          if (m.price >= BIG_PURCHASE_THRESHOLD) {
+            Modal.confirm(this, {
+              title: 'Confirm purchase',
+              message: `Buy a ${m.name} for ${formatMoney(m.price)}?\nCash after purchase: ${formatMoney(me.cash - m.price)}.`,
+              confirmLabel: 'Buy',
+              cancelLabel: 'Cancel',
+              onConfirm: doBuy,
+            });
+          } else {
+            doBuy();
+          }
         },
         disabled: !canAfford,
       });

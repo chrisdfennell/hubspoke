@@ -12,6 +12,8 @@ import { netWorth, BILLIONAIRE_VICTORY, MILESTONES, Milestone } from '../systems
 import { Modal } from '../ui/Modal';
 import { getCEO } from '../state/ceos';
 import { consumePendingPaper } from '../systems/Newspaper';
+import { tutorialDismissed } from '../systems/Tutorial';
+import { TutorialBanner } from '../ui/TutorialBanner';
 
 export class HUDScene extends Phaser.Scene {
   private dateText!: Phaser.GameObjects.Text;
@@ -40,6 +42,9 @@ export class HUDScene extends Phaser.Scene {
    *  every frame. Reset to 0 once the player resolves it so a future
    *  shortfall fires the alert again. */
   private lastShortfallAlerted = 0;
+  /** Tutorial banner instance — only created on a fresh run (no flights
+   *  yet AND localStorage flag not set). Cleared via the dismiss callback. */
+  private tutorialBanner: TutorialBanner | null = null;
 
   constructor() { super({ key: 'HUDScene', active: false }); }
 
@@ -151,6 +156,14 @@ export class HUDScene extends Phaser.Scene {
     // Seed the celebrated set from what's already in the save so a reload
     // doesn't re-fire popups for milestones the player has already seen.
     this.celebratedMilestones = new Set(GameState.get().achievementsUnlocked);
+
+    // First-run onboarding banner. localStorage gates this across saves;
+    // BootScene also auto-dismisses for loaded saves past the goalposts.
+    if (!tutorialDismissed()) {
+      this.tutorialBanner = new TutorialBanner(this, () => {
+        this.tutorialBanner = null;
+      });
+    }
   }
 
   private makeSpeedButton(x: number, y: number, label: string, onClick: () => void): Phaser.GameObjects.Text {
@@ -171,6 +184,7 @@ export class HUDScene extends Phaser.Scene {
     this.checkGameOver();
     this.checkNewMilestones();
     this.checkPendingPaper();
+    this.tutorialBanner?.tick();
   }
 
   /** When the Newspaper system has queued a weekly paper, launch its scene

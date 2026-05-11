@@ -15,6 +15,7 @@ import { registerMilestoneHooks } from '../systems/Milestones';
 import { registerStatsHooks } from '../systems/Stats';
 import { registerNewspaperHooks, resetNewspaper } from '../systems/Newspaper';
 import { registerSponsorHooks } from '../systems/Sponsors';
+import { maybeAutoDismissForLoadedSave } from '../systems/Tutorial';
 import {
   registerAutoSave, saveNow, listSlots, loadSlot, deleteSlot, setActiveSlot,
   SlotInfo, MAX_SLOTS,
@@ -354,6 +355,9 @@ export class BootScene extends Phaser.Scene {
     // load, so clear it whenever a game starts to avoid stale snaps from a
     // prior run on the same tab.
     resetNewspaper();
+    // Skip the onboarding banner when continuing a save that's already
+    // past the tutorial goalposts (flights flown). Fresh saves still see it.
+    maybeAutoDismissForLoadedSave();
     refreshOffers();
     refreshContacts();
     registerAutoSave();
