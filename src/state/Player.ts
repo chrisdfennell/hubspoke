@@ -45,6 +45,10 @@ export interface PlayerSnapshot {
   /** CEO id (see ceos.ts). Only the human typically has one; AI rivals
    *  leave it unset. Optional for backwards-compat with pre-CEO saves. */
   ceoId?: string;
+  /** Day-count (year*360+month*30+day) of the last time each Duty Free
+   *  boost item was used. Cooldown is one game-day per item — keeps the
+   *  player from buying ten Marketing Campaigns in a row to swing rep. */
+  boostUsedOn?: Record<string, number>;
 }
 
 export class Player {
@@ -88,6 +92,9 @@ export class Player {
    *  the catalog. AI rivals leave this undefined. */
   ceoId?: string;
 
+  /** Per-boost-item last-use day, gating the daily cooldown in Duty Free. */
+  boostUsedOn: Record<string, number> = {};
+
   /** Number of apron gates available at the given hub. */
   gatesAt(hubId: string): number {
     return this.gateCounts[hubId] ?? STARTING_GATES;
@@ -126,6 +133,7 @@ export class Player {
       hubs: [...this.hubs],
       gateCounts: { ...this.gateCounts },
       ceoId: this.ceoId,
+      boostUsedOn: { ...this.boostUsedOn },
     };
   }
 
@@ -148,6 +156,7 @@ export class Player {
     p.hubs = (s.hubs && s.hubs.length > 0) ? [...s.hubs] : [HOME_AIRPORT];
     p.gateCounts = { ...(s.gateCounts ?? {}) };
     p.ceoId = s.ceoId;
+    p.boostUsedOn = { ...(s.boostUsedOn ?? {}) };
     return p;
   }
 }
