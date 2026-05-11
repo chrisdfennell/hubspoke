@@ -9,6 +9,31 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — News Stand tabs: Voices / Headlines / World Events
+
+The News Stand was only showing `state.gameEvents` (the structured
+demand events). The 💬 passenger quotes and all the other ticker
+content live in `state.news` — they were flashing by the bottom bar
+and getting buried with no way to read them later. Fixed with tabs.
+
+**Three tabs** ([NewsScene.ts](src/scenes/rooms/NewsScene.ts)):
+
+- **Passenger Voices** (default) — every `💬`-prefixed item from
+  `state.news`, prefix stripped. Date stamp on the left, quote on
+  the right. Defaults to this tab so the first thing you see in
+  the News Stand is the feedback you came to read.
+- **Headlines** — every non-`💬` item from `state.news`. Arrivals,
+  rival activity, milestone bumps, sabotage outcomes, sponsor
+  offers and resolutions — the full ticker history, browsable.
+- **World Events** — the original News Stand content: structured
+  `gameEvents` with severity, headline, body, and impact.
+
+Tab bar follows the same Button-based pattern as the Office tab
+bar. Switching scrolls back to the top so a long history doesn't
+leave you mid-scroll in the previous tab.
+
+---
+
 ## 2026-05-11 — Sponsor section in the weekly newspaper + plane numbering
 
 Two compounding additions to the just-shipped systems.
