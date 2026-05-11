@@ -114,7 +114,7 @@ export class WorkshopScene extends RoomScene {
       // amortized daily maintenance. Igor's CEO perk halves this.
       const ceo = getCEO(me.ceoId);
       const repairMult = ceo?.perks.repairCostMult ?? 1.0;
-      const repairCost = Math.round((1 - plane.condition) * plane.model.price * 0.02 * repairMult);
+      const repairCost = Math.round((1 - plane.condition) * plane.model.price * 0.01 * repairMult);
       const needsWork = plane.condition < 0.99;
       const canPay = me.cash >= repairCost;
       const repairBtn = new Button({

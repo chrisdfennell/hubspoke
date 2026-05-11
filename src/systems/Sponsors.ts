@@ -52,10 +52,11 @@ function rollSponsor(state: GameState): SponsorContract {
   const baseTarget = 500 + Math.floor(Math.random() * 1500);
   const target = Math.round(baseTarget * (0.6 + city.demand));
 
-  // Reward: $22-32 per passenger, so a 2,000-pax sponsor pays ~$54k.
-  // Roughly 2-3× what those passengers would pay in ticket revenue, which
-  // makes accepting genuinely valuable but won't trivialize the economy.
-  const ratePerPax = 22 + Math.random() * 10;
+  // Reward: $28-40 per passenger, so a 2,000-pax sponsor pays ~$68k.
+  // Roughly 2.5-3.5× what those passengers would pay in ticket revenue,
+  // which makes accepting genuinely valuable but won't trivialize the
+  // economy.
+  const ratePerPax = 28 + Math.random() * 12;
   const reward = Math.round(target * ratePerPax);
 
   // Duration: 7-21 days. Tight contracts for small targets, longer for big.

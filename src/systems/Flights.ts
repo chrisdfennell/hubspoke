@@ -341,7 +341,7 @@ export function registerFlightHooks() {
     for (const plane of me.planes) {
       if (plane.status.kind !== 'idle') continue;
       if (plane.condition >= threshold) continue;
-      const cost = Math.round((1 - plane.condition) * plane.model.price * 0.02 * repairMult);
+      const cost = Math.round((1 - plane.condition) * plane.model.price * 0.01 * repairMult);
       if (me.cash < cost) {
         state.pushNews(
           `${plane.name} below auto-repair threshold but funds short (need ${'$' + cost.toLocaleString('en-US')}).`,

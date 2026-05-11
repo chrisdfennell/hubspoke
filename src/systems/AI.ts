@@ -82,7 +82,7 @@ function aiRepairFleet(player: Player) {
   for (const plane of player.planes) {
     if (plane.status.kind !== 'idle') continue;
     if (plane.condition >= threshold) continue;
-    const cost = Math.round((1 - plane.condition) * plane.model.price * 0.02 * repairMult);
+    const cost = Math.round((1 - plane.condition) * plane.model.price * 0.01 * repairMult);
     if (player.cash < cost) continue;
     player.cash -= cost;
     plane.condition = 1.0;

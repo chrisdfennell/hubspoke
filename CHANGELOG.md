@@ -9,6 +9,52 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Balance pass: starting cash, crew, repairs, sponsors
+
+Six tuning adjustments driven by play-feedback that the early game
+felt scrappier than intended even on Easy.
+
+**Starting cash bumps** ([Difficulty.ts](src/state/Difficulty.ts))
+- Easy: $15M → **$25M** (room for 2 Cessnas, crew, and exploration)
+- Normal: $8M → **$14M** (a genuine buffer for the "recommended first run")
+- Hard: $4M → **$6M** (still tight, not punishing on turn 1)
+- Brutal: unchanged ($2M — it's brutal by design)
+
+**Starting crew bumps** ([Difficulty.ts](src/state/Difficulty.ts))
+- Easy: 2P/2M → **3P/3M**
+- Normal: 1P/1M → **2P/2M** (you can fly 2 planes day 1 instead of
+  being stuck with 1 until you hire)
+- Hard: unchanged (1P/1M)
+- Brutal: unchanged (0P/0M)
+
+**Workshop repair coefficient halved** — `0.02 → 0.01` of plane price
+per condition point ([WorkshopScene.ts](src/scenes/rooms/WorkshopScene.ts),
+[Flights.ts](src/systems/Flights.ts), [AI.ts](src/systems/AI.ts) —
+three call sites, same coefficient). A B737 at 50% condition used
+to cost $46M to fully repair, nearly the price of a new one and
+incentivizing scrap-and-buy over maintenance. Now $23M — still
+significant but in the right ballpark for choosing to keep the
+plane. Igor's CEO repair-cost perk continues to halve this on top.
+
+**Sponsor rewards bumped** ([Sponsors.ts](src/systems/Sponsors.ts))
+- Rate per pax: `$22-$32` → `$28-$40`. A 2,000-pax sponsor now pays
+  ~$68k instead of ~$54k. Sponsors should feel like a meaningful
+  reason to take a contract, not a small decoration on top of
+  normal revenue.
+
+**Normal monthly principal softened** ([Difficulty.ts](src/state/Difficulty.ts))
+- Normal: 5% → **4%** of outstanding loan per month. A $10M loan
+  now costs $400k/month in principal instead of $500k — less
+  railroading on the "recommended first run." Hard (7%) and
+  Brutal (10%) unchanged.
+
+Save compat: existing saves keep their current difficulty's
+runtime values, but the new monthly cycle and tuned constants
+take effect immediately on next month rollover / next visit to
+Workshop / next sponsor offer roll.
+
+---
+
 ## 2026-05-11 — Required monthly loan principal (difficulty-scaled)
 
 Loans used to be interest-only forever — the daily-interest bleed
