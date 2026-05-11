@@ -13,6 +13,11 @@ export interface Achievement {
   icon: string;
   /** Numerical target; unlock fires when `progress(state) >= target`. */
   target: number;
+  /** How to format the progress value in the Stats panel — `'money'`
+   *  renders as `$1,234`, `'count'` (default) renders as `1,234`. Tag
+   *  explicitly because a heuristic on target size mis-classifies counts
+   *  like "100,000 passengers" as money. */
+  valueKind?: 'count' | 'money';
   /** Read current progress out of the live game state. */
   progress(state: GameState): number;
   /** Headline copy when unlocked. Defaults to `Achievement: <name>.` */
@@ -34,16 +39,16 @@ export const ACHIEVEMENTS: Achievement[] = [
   // --- Wealth (legacy ids — keep these stable for save-compat) ---
   { id: 'first-10m',  category: 'wealth', icon: '💰', name: 'First $10M net worth',
     description: 'Trade press notices.',
-    target: 10_000_000,    progress: s => netWorth(s.human) },
+    target: 10_000_000, valueKind: 'money', progress: s => netWorth(s.human) },
   { id: 'first-100m', category: 'wealth', icon: '💰', name: 'First $100M net worth',
     description: 'You are now a serious airline.',
-    target: 100_000_000,   progress: s => netWorth(s.human) },
+    target: 100_000_000, valueKind: 'money', progress: s => netWorth(s.human) },
   { id: 'first-500m', category: 'wealth', icon: '💰', name: 'First $500M net worth',
     description: 'Investors are circling.',
-    target: 500_000_000,   progress: s => netWorth(s.human) },
+    target: 500_000_000, valueKind: 'money', progress: s => netWorth(s.human) },
   { id: 'first-1b',   category: 'wealth', icon: '🏆', name: '$1 Billion net worth',
     description: "You've built an empire.",
-    target: 1_000_000_000, progress: s => netWorth(s.human) },
+    target: 1_000_000_000, valueKind: 'money', progress: s => netWorth(s.human) },
 
   // --- Operations ---
   { id: 'first-flight', category: 'operations', icon: '✈', name: 'First flight',
@@ -114,7 +119,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     target: 1, progress: s => s.stats.crashes },
   { id: 'best-50k', category: 'notable', icon: '💎', name: 'Big payday',
     description: 'Cleared $50k profit on one flight.',
-    target: 50_000, progress: s => s.stats.bestFlightProfit },
+    target: 50_000, valueKind: 'money', progress: s => s.stats.bestFlightProfit },
 ];
 
 export const ACHIEVEMENT_CATEGORIES: Array<{ id: AchievementCategory; label: string }> = [

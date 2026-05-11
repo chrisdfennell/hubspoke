@@ -7,6 +7,7 @@ import { renderStatsBlock } from '../../ui/StatsBlock';
 import {
   ACHIEVEMENTS, ACHIEVEMENT_CATEGORIES, Achievement, isUnlocked,
 } from '../../state/achievements';
+import { checkAchievements } from '../../systems/Milestones';
 
 /**
  * Career stats panel — opened from the bar icon next to the `?` help
@@ -17,6 +18,11 @@ export class StatsScene extends RoomScene {
   constructor() { super('StatsScene'); this.title = 'Career Stats'; }
 
   buildRoom() {
+    // Re-evaluate achievements when the player opens Stats so newly-
+    // crossed thresholds get their news entry + celebration immediately
+    // rather than waiting for the next clock.onDay fire. Idempotent —
+    // already-unlocked ids are skipped.
+    checkAchievements();
     const state = GameState.get();
     const me = state.human;
     const b = this.panelBounds;
@@ -41,21 +47,23 @@ export class StatsScene extends RoomScene {
 
   private renderAchievements(left: number, startY: number): number {
     const state = GameState.get();
-    const unlocked = new Set(state.achievementsUnlocked);
+    // Use the live `isUnlocked` check rather than the persisted set so the
+    // visual is accurate the instant a threshold is crossed — the persisted
+    // set is what gates news/popup firing, not what the row should display.
     let y = startY;
 
-    const totalDone = ACHIEVEMENTS.filter(a => unlocked.has(a.id)).length;
+    const totalDone = ACHIEVEMENTS.filter(a => isUnlocked(a, state)).length;
     this.addText(left, y, `Achievements  (${totalDone} / ${ACHIEVEMENTS.length})`, 18, COLORS.accentText);
     y += 28;
 
     for (const cat of ACHIEVEMENT_CATEGORIES) {
       const inCat = ACHIEVEMENTS.filter(a => a.category === cat.id);
       if (inCat.length === 0) continue;
-      const doneInCat = inCat.filter(a => unlocked.has(a.id)).length;
+      const doneInCat = inCat.filter(a => isUnlocked(a, state)).length;
       this.addText(left, y, `${cat.label}  (${doneInCat} / ${inCat.length})`, 14, COLORS.accentText);
       y += 22;
       for (const a of inCat) {
-        y = this.drawAchievementRow(a, state, unlocked.has(a.id), left + 12, y);
+        y = this.drawAchievementRow(a, state, isUnlocked(a, state), left + 12, y);
       }
       y += 10;
     }
@@ -99,7 +107,7 @@ export class StatsScene extends RoomScene {
       const barH = 6;
       this.content.add(this.add.rectangle(barX, barY, barW, barH, 0x223046).setOrigin(0));
       this.content.add(this.add.rectangle(barX, barY, barW * pct, barH, 0xffc857).setOrigin(0));
-      const label = `${formatProgressValue(cur, a.target)} / ${formatProgressValue(a.target, a.target)}`;
+      const label = `${formatProgressValue(cur, a.valueKind)} / ${formatProgressValue(a.target, a.valueKind)}`;
       this.addText(barX, y + 4, label, 11, COLORS.textDim);
     }
 
@@ -107,12 +115,8 @@ export class StatsScene extends RoomScene {
   }
 }
 
-/** Pretty-print a counter. Uses $XX form when target looks like money,
- *  thousands separators otherwise. The "money?" heuristic is simply that
- *  the target is >= 1,000,000 — every wealth/best-flight achievement
- *  hits that, every count-style one stays below. */
-function formatProgressValue(v: number, target: number): string {
-  if (target >= 1_000_000) return formatMoney(v);
-  if (target >= 50_000)    return formatMoney(v);
+/** Pretty-print a counter using the achievement's declared `valueKind`. */
+function formatProgressValue(v: number, kind: 'count' | 'money' | undefined): string {
+  if (kind === 'money') return formatMoney(v);
   return Math.floor(v).toLocaleString('en-US');
 }
