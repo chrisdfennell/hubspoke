@@ -7,6 +7,7 @@ import { getFuelPrice, setFuelPrice } from '../systems/Economy';
 import { GameEvent } from '../systems/Events';
 import { snapshotModifiers, restoreModifiers } from './demandModifiers';
 import { CargoContract, getContractCounter, setContractCounter } from '../systems/Cargo';
+import { SponsorContract } from './Sponsor';
 import { Contact, getLoungeCounter, setLoungeCounter } from '../systems/Lounge';
 import { Difficulty, getDifficulty } from './Difficulty';
 
@@ -132,6 +133,10 @@ export interface GameSnapshot {
   cargoActive: CargoContract[];
   cargoCompleted: CargoContract[];
   cargoCounter: number;
+  /** Sponsor contracts: available offers, accepted/in-progress, and history. */
+  sponsorOffers?: SponsorContract[];
+  sponsorActive?: SponsorContract[];
+  sponsorCompleted?: SponsorContract[];
   loungeContacts: Contact[];
   loungeCounter: number;
   /** Difficulty preset for this run. */
@@ -177,6 +182,12 @@ export class GameState {
   cargoActive: CargoContract[] = [];
   /** Recently delivered or failed cargo contracts. */
   cargoCompleted: CargoContract[] = [];
+  /** Sponsor contracts available to accept. Optional in snapshot for save-compat. */
+  sponsorOffers: SponsorContract[] = [];
+  /** Sponsor contracts accepted by the human, in progress. */
+  sponsorActive: SponsorContract[] = [];
+  /** Recently completed / failed / expired sponsor contracts (history). */
+  sponsorCompleted: SponsorContract[] = [];
   /** VIP lounge contacts available today. */
   loungeContacts: Contact[] = [];
   /** Difficulty preset for this run. */
@@ -232,6 +243,9 @@ export class GameState {
     s.cargoActive = snap.cargoActive ?? [];
     s.cargoCompleted = snap.cargoCompleted ?? [];
     if (typeof snap.cargoCounter === 'number') setContractCounter(snap.cargoCounter);
+    s.sponsorOffers = snap.sponsorOffers ?? [];
+    s.sponsorActive = snap.sponsorActive ?? [];
+    s.sponsorCompleted = snap.sponsorCompleted ?? [];
     s.loungeContacts = snap.loungeContacts ?? [];
     if (typeof snap.loungeCounter === 'number') setLoungeCounter(snap.loungeCounter);
     s.difficulty = snap.difficulty ?? 'normal';
@@ -264,6 +278,9 @@ export class GameState {
       cargoActive: this.cargoActive,
       cargoCompleted: this.cargoCompleted,
       cargoCounter: getContractCounter(),
+      sponsorOffers: this.sponsorOffers,
+      sponsorActive: this.sponsorActive,
+      sponsorCompleted: this.sponsorCompleted,
       loungeContacts: this.loungeContacts,
       loungeCounter: getLoungeCounter(),
       difficulty: this.difficulty,

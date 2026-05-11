@@ -10,6 +10,7 @@ import { Player } from '../state/Player';
 import { getCEO } from '../state/ceos';
 import { planeReputationPerFlight } from '../state/upgrades';
 import { maybePassengerFeedback } from './PassengerFeedback';
+import { trackArrival as trackSponsorArrival } from './Sponsors';
 
 /** Convert a GameDate to a comparable minute count since year 0. Simplified. */
 function dateToMinutes(d: GameDate): number {
@@ -239,6 +240,7 @@ export function landArrivedPlanes() {
           sound.play('land');
           maybePassengerFeedback(player, plane, route, result);
         }
+        trackSponsorArrival(player, route, result.passengers);
         // Post-landing mishap check. A neglected plane (condition < 0.5)
         // rolls for an incident; the lower the condition, the higher the
         // chance and the worse the outcome. Crashes destroy the plane;

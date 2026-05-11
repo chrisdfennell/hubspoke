@@ -10,11 +10,14 @@ import { getFuelPrice } from '../../systems/Economy';
 import { Player } from '../../state/Player';
 import { Plane } from '../../state/Plane';
 import { Route } from '../../state/Route';
+import { SponsorContract } from '../../state/Sponsor';
+import { acceptSponsor, declineSponsor } from '../../systems/Sponsors';
+import { dateToDay } from '../../state/demandModifiers';
 
 const NAME_MIN = 1;
 const NAME_MAX = 32;
 
-type TabId = 'overview' | 'fleet' | 'routes' | 'standings';
+type TabId = 'overview' | 'fleet' | 'routes' | 'standings' | 'sponsors';
 type SortDir = 'asc' | 'desc';
 
 interface SortState { column: string; dir: SortDir; }
@@ -28,6 +31,7 @@ export class OfficeScene extends RoomScene {
     fleet:     { column: 'name', dir: 'asc' },
     routes:    { column: 'distance', dir: 'asc' },
     standings: { column: 'cash', dir: 'desc' },
+    sponsors:  { column: '', dir: 'asc' },
   };
 
   constructor() { super('OfficeScene'); this.title = 'Office — Overview'; }
@@ -39,6 +43,7 @@ export class OfficeScene extends RoomScene {
       case 'fleet':     this.buildFleet(); break;
       case 'routes':    this.buildRoutes(); break;
       case 'standings': this.buildStandings(); break;
+      case 'sponsors':  this.buildSponsors(); break;
     }
   }
 
@@ -50,6 +55,7 @@ export class OfficeScene extends RoomScene {
       { id: 'fleet',     label: 'Fleet' },
       { id: 'routes',    label: 'Routes' },
       { id: 'standings', label: 'Standings' },
+      { id: 'sponsors',  label: 'Sponsors' },
     ];
     let x = b.x + 30;
     const y = b.y + 80;
@@ -414,6 +420,147 @@ export class OfficeScene extends RoomScene {
       this.addText(left + cols[6].x, y + 6, taken ? 'taken over' : 'active', 13, labelColor);
       y += 22;
     }
+  }
+
+  // ----- Sponsors -----
+  private buildSponsors() {
+    const state = GameState.get();
+    const me = state.human;
+    const b = this.panelBounds;
+    const left = b.x + 30;
+    const today = dateToDay(state.date);
+    let y = b.y + 130;
+
+    this.addText(left, y, 'Sponsor Contracts', 18, COLORS.accentText);
+    this.addText(left, y + 26,
+      'Brands pay you to carry passengers to specific cities by a deadline. Every arrival of yours at the destination counts toward the target.',
+      11, COLORS.textDim);
+    y += 60;
+
+    // -- Active contracts --
+    this.addText(left, y, 'Active', 14, COLORS.accentText);
+    y += 22;
+    const active = state.sponsorActive.filter(s => s.ownerId === me.id);
+    if (active.length === 0) {
+      this.addText(left + 8, y, '— none accepted —', 12, COLORS.textDim);
+      y += 22;
+    } else {
+      for (const s of active) {
+        y = this.drawActiveSponsor(s, left, y, today);
+      }
+    }
+    y += 12;
+
+    // -- Available offers --
+    this.addText(left, y, 'Available offers', 14, COLORS.accentText);
+    y += 22;
+    if (state.sponsorOffers.length === 0) {
+      this.addText(left + 8, y, '— no offers right now. Check back tomorrow. —', 12, COLORS.textDim);
+      y += 22;
+    } else {
+      for (const s of state.sponsorOffers) {
+        y = this.drawOfferSponsor(s, left, y, today);
+      }
+    }
+    y += 12;
+
+    // -- Recent history (last 6) --
+    const history = state.sponsorCompleted.slice(-6).reverse();
+    if (history.length > 0) {
+      this.addText(left, y, 'Recent history', 14, COLORS.accentText);
+      y += 22;
+      for (const s of history) {
+        const label = s.status === 'completed' ? '★ Completed'
+                    : s.status === 'failed'    ? '⚠ Failed'
+                    :                            '· Expired';
+        const color = s.status === 'completed' ? COLORS.accentText
+                    : s.status === 'failed'    ? '#ff7b88'
+                    :                            COLORS.textDim;
+        this.addText(left + 8, y, `${label} — ${s.brand} (${getCity(s.toCity).name})`, 12, color);
+        y += 18;
+      }
+    }
+  }
+
+  private drawActiveSponsor(s: SponsorContract, left: number, y: number, today: number): number {
+    const b = this.panelBounds;
+    const cardW = b.w - 60;
+    const cardH = 64;
+    this.content.add(this.add.rectangle(left + cardW / 2, y + cardH / 2, cardW, cardH, 0x162a3f)
+      .setStrokeStyle(1, 0x335577));
+
+    const daysLeft = Math.max(0, s.deadlineDay - today);
+    const pct = Math.min(1, s.progress / s.target);
+    const pctText = `${Math.round(pct * 100)}%`;
+    const deadlineColor = daysLeft <= 2 ? '#ff7b88' : COLORS.text;
+
+    this.addText(left + 12, y + 8, `${s.brand} → ${getCity(s.toCity).name}`, 14, COLORS.accentText);
+    this.addText(left + 12, y + 30,
+      `${s.progress.toLocaleString('en-US')} / ${s.target.toLocaleString('en-US')} pax  (${pctText})`,
+      12, COLORS.text);
+
+    // Progress bar
+    const barX = left + 12;
+    const barY = y + 50;
+    const barW = cardW - 280;
+    const barH = 6;
+    this.content.add(this.add.rectangle(barX, barY, barW, barH, 0x223046).setOrigin(0));
+    this.content.add(this.add.rectangle(barX, barY, barW * pct, barH, 0x7be08a).setOrigin(0));
+
+    // Right column: reward + deadline
+    const rx = left + cardW - 220;
+    this.addText(rx, y + 8, `Reward: ${formatMoney(s.reward)}  +${s.repReward} rep`, 12, '#ffc857');
+    this.addText(rx, y + 30, `Deadline: day ${s.deadlineDay}  (${daysLeft} day${daysLeft === 1 ? '' : 's'} left)`, 12, deadlineColor);
+
+    return y + cardH + 8;
+  }
+
+  private drawOfferSponsor(s: SponsorContract, left: number, y: number, today: number): number {
+    const b = this.panelBounds;
+    const cardW = b.w - 60;
+    const cardH = 76;
+    this.content.add(this.add.rectangle(left + cardW / 2, y + cardH / 2, cardW, cardH, 0x142036)
+      .setStrokeStyle(1, 0x335577));
+
+    const offerDaysLeft = Math.max(0, s.offerExpiresOnDay - today);
+    const duration = s.deadlineDay - (s.offerExpiresOnDay - 3);  // OFFER_DURATION_DAYS=3
+
+    this.addText(left + 12, y + 6, s.brand, 14, COLORS.accentText);
+    this.addText(left + 12, y + 26, `${s.pitch} to ${getCity(s.toCity).name}.`, 12, COLORS.text);
+    this.addText(left + 12, y + 46,
+      `${s.target.toLocaleString('en-US')} pax over ${duration} days  ·  Reward ${formatMoney(s.reward)} + ${s.repReward} rep  ·  Penalty: −${s.repPenalty} rep`,
+      12, COLORS.textDim);
+
+    // Right column: offer expiry + buttons
+    const rx = left + cardW - 240;
+    const expiryColor = offerDaysLeft <= 1 ? '#ff7b88' : COLORS.textDim;
+    this.addText(rx, y + 6, `Offer expires in ${offerDaysLeft} day${offerDaysLeft === 1 ? '' : 's'}`, 11, expiryColor);
+
+    const me = GameState.get().human;
+    const acceptBtn = new Button({
+      scene: this,
+      x: rx + 60, y: y + 50, width: 110, height: 26,
+      label: 'Accept',
+      bg: 0x2f6042,
+      bgHover: 0x3f8055,
+      onClick: () => {
+        if (acceptSponsor(me, s.id)) this.rebuild();
+      },
+    });
+    const declineBtn = new Button({
+      scene: this,
+      x: rx + 180, y: y + 50, width: 80, height: 26,
+      label: 'Decline',
+      bg: 0x402020,
+      bgHover: 0x603030,
+      onClick: () => {
+        if (declineSponsor(s.id)) this.rebuild();
+      },
+    });
+    this.content.add(acceptBtn);
+    this.content.add(declineBtn);
+
+    return y + cardH + 8;
   }
 
   // ----- Sortable header helper -----

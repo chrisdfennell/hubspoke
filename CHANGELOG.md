@@ -9,6 +9,64 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Sponsor contracts
+
+First proactive goal layer on top of the steady-state economy. Brand
+sponsors periodically offer passenger-count deals: "Carry N
+passengers to City X by day Y for $$$." Layered on top of normal
+flights — every arrival of yours at the destination counts — so no
+new flight type or dispatch path needed.
+
+**State** ([Sponsor.ts](src/state/Sponsor.ts),
+[GameState.ts](src/state/GameState.ts))
+- `SponsorContract` interface with `target` / `progress` /
+  `deadlineDay` / `reward` / `repReward` / `repPenalty` fields and a
+  status of `available | active | completed | failed | expired`.
+- Three arrays on GameState: `sponsorOffers` (available),
+  `sponsorActive` (in-progress for the human), `sponsorCompleted`
+  (history of resolutions). All persist in save/load with `?? []`
+  fallbacks for save-compat.
+
+**System** ([Sponsors.ts](src/systems/Sponsors.ts))
+- `rollDailyOffers()` fires from a `clock.onDay` hook. Expires
+  offers past their `offerExpiresOnDay`, then rolls a new offer
+  with ~35% chance if there are fewer than 3 available. Target is
+  500-2000 base scaled by destination city demand (so a Pago Pago
+  contract is smaller than a Los Angeles one); reward is roughly
+  $22-32 per passenger; duration is 7-21 days; offer expiry is 3
+  days.
+- `resolveActive()` (also daily) checks every active contract: if
+  `progress >= target` → completed, pays the reward + bumps rep; if
+  `today >= deadlineDay` → failed, dings rep by `repPenalty`. Posts
+  ★ or ⚠ news headline depending on outcome.
+- `trackArrival(player, route, passengers)` called from
+  `Flights.landArrivedPlanes` for every successful arrival. Bumps
+  `progress` on every matching active sponsor (filters by `ownerId
+  === player.id` and `toCity === route.toCity`). AI is short-
+  circuited — sponsors are a human-only mechanic right now.
+- `acceptSponsor(player, sponsorId)` recomputes `deadlineDay`
+  relative to the current day so you get the full advertised
+  duration regardless of when in the 3-day offer window you accept.
+
+**UI** ([OfficeScene.ts](src/scenes/rooms/OfficeScene.ts))
+- New 'sponsors' tab in the Office tab bar (alongside Overview,
+  Fleet, Routes, Standings).
+- **Active** section: one card per accepted contract showing
+  destination, progress (with a green fill bar), reward, and
+  deadline. Days-left text turns red below 3 days.
+- **Available offers**: one card per offer showing brand + pitch +
+  target / duration / reward + offer-expiry. Accept and Decline
+  buttons inline. Offer-expiry text turns red on the last day.
+- **Recent history**: last 6 resolutions (completed / failed /
+  expired) as a compact list.
+
+**Brand + pitch pool** — 15 sponsor brands (Coca-Air, GlobalReach
+Travel, Skyline Beverages, …) × 8 pitch templates (sponsoring a
+sports team / launching a tourism campaign / …) gives ~120
+combinations so offers don't read repetitive across a run.
+
+---
+
 ## 2026-05-11 — Visible AI rivals on your apron
 
 When a rival's route touches your active hub, their planes now

@@ -14,6 +14,7 @@ import { registerLoungeHooks, refreshContacts } from '../systems/Lounge';
 import { registerMilestoneHooks } from '../systems/Milestones';
 import { registerStatsHooks } from '../systems/Stats';
 import { registerNewspaperHooks, resetNewspaper } from '../systems/Newspaper';
+import { registerSponsorHooks } from '../systems/Sponsors';
 import {
   registerAutoSave, saveNow, listSlots, loadSlot, deleteSlot, setActiveSlot,
   SlotInfo, MAX_SLOTS,
@@ -43,6 +44,7 @@ export class BootScene extends Phaser.Scene {
     registerMilestoneHooks();
     registerStatsHooks();
     registerNewspaperHooks();
+    registerSponsorHooks();
 
     this.cameras.main.setBackgroundColor(COLORS.bg);
 
