@@ -52,10 +52,10 @@ export class AirportScene extends Phaser.Scene {
   private readonly apronY = 600;
   private readonly runwayY = 680;
   /** Leftmost / rightmost gate centers. Gates are spaced evenly between
-   *  these. Picked so 8 gates land at the original 120 / 260 / ... / 1100
-   *  positions; with 12 gates each step is ~89 px. */
-  private readonly GATE_X_LEFT = 120;
-  private readonly GATE_X_RIGHT = 1100;
+   *  these. Centered around `GAME_WIDTH / 2` (640) so the gate row sits
+   *  vertically aligned with the room grid above and the runway below. */
+  private readonly GATE_X_LEFT = 150;
+  private readonly GATE_X_RIGHT = 1130;
   /** Mutable — recomputed by ensureGateLayout() whenever the active hub or
    *  its purchased gate count changes. */
   private gateXs: number[] = [];
@@ -86,10 +86,12 @@ export class AirportScene extends Phaser.Scene {
    *  visitor-row render so the parked icon doesn't double with the
    *  animating icon. */
   private animatingRivalIds = new Set<string>();
-  /** Visitor row y-coordinate (above the gate boxes, below the rooms). */
+  /** Visitor row y-coordinate (above the gate boxes, below the rooms).
+   *  X range centered around GAME_WIDTH / 2 so the visitor row sits on
+   *  the same vertical axis as everything else. */
   private readonly VISITOR_Y = 568;
-  private readonly VISITOR_X_LEFT = 200;
-  private readonly VISITOR_X_RIGHT = 1000;
+  private readonly VISITOR_X_LEFT = 240;
+  private readonly VISITOR_X_RIGHT = 1040;
   private readonly MAX_VISITORS = 4;
 
   /** Tinted overlay covering apron + runway. Its color and alpha shift with
