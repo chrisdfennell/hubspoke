@@ -1,4 +1,5 @@
 import { PlaneModel, getPlaneModel } from './catalog';
+import { PlaneUpgrades } from './upgrades';
 
 export type PlaneStatus =
   | { kind: 'idle'; airportId: string }
@@ -30,6 +31,9 @@ export interface PlaneSnapshot {
   routeId: string | null;
   status: PlaneStatus;
   name: string;
+  /** Equipped upgrades by category. Optional for backwards-compat with
+   *  pre-upgrade saves. */
+  upgrades?: PlaneUpgrades;
 }
 
 export class Plane {
@@ -42,6 +46,9 @@ export class Plane {
   status: PlaneStatus;
   /** Display name the player can rename. */
   name: string;
+  /** Equipped upgrades by category (livery / interior / entertainment).
+   *  Each plane can hold at most one upgrade per category. Default empty. */
+  upgrades: PlaneUpgrades = {};
 
   constructor(modelId: string, airportId: string, name?: string) {
     const m = getPlaneModel(modelId);
@@ -51,6 +58,7 @@ export class Plane {
     this.routeId = null;
     this.status = { kind: 'idle', airportId };
     this.name = name ?? `${m.name} ${this.id.toUpperCase()}`;
+    this.upgrades = {};
   }
 
   get model(): PlaneModel {
@@ -65,6 +73,7 @@ export class Plane {
       routeId: this.routeId,
       status: this.status,
       name: this.name,
+      upgrades: { ...this.upgrades },
     };
   }
 
@@ -77,6 +86,7 @@ export class Plane {
     p.routeId = s.routeId;
     p.status = s.status;
     p.name = s.name;
+    p.upgrades = { ...(s.upgrades ?? {}) };
     // Bump counter so future newPlaneId() doesn't collide.
     const num = parseInt(s.id.replace(/[^0-9]/g, ''), 10);
     if (!isNaN(num)) setPlaneIdCounter(num + 1);

@@ -9,11 +9,32 @@ import { Plane } from '../../state/Plane';
 import { getFuelPrice } from '../../systems/Economy';
 import { sound } from '../../systems/Sound';
 import { getCEO } from '../../state/ceos';
+import { UPGRADES, UpgradeCategory, getUpgrade } from '../../state/upgrades';
 
 export class WorkshopScene extends RoomScene {
-  constructor() { super('WorkshopScene'); this.title = 'Workshop — Buy Planes'; }
+  /** When set, the Workshop renders a focused "Outfit" view for that
+   *  plane instead of the buy table + fleet list. Cleared by the Back
+   *  button in the outfit view, and reset on every fresh scene entry
+   *  (Phaser reuses instances) so leaving + re-entering always lands
+   *  on the default view. */
+  private outfitPlaneId: string | null = null;
+
+  constructor() { super('WorkshopScene'); this.title = 'Workshop'; }
+
+  create() {
+    this.outfitPlaneId = null;
+    super.create();
+  }
 
   buildRoom() {
+    if (this.outfitPlaneId) {
+      this.buildOutfitView();
+      return;
+    }
+    this.buildBuyAndFleetView();
+  }
+
+  private buildBuyAndFleetView() {
     const state = GameState.get();
     const me = state.human;
     const b = this.panelBounds;
@@ -59,6 +80,7 @@ export class WorkshopScene extends RoomScene {
           const home = state.activeHub;
           const plane = new Plane(m.id, home);
           me.planes.push(plane);
+          state.stats.planesBought++;
           state.pushNews(`${me.name} purchased a ${m.name} (${plane.name}) at ${getCity(home).name}.`);
           sound.play('buy');
           this.rebuild();
@@ -97,7 +119,7 @@ export class WorkshopScene extends RoomScene {
       const canPay = me.cash >= repairCost;
       const repairBtn = new Button({
         scene: this,
-        x: left + 700,
+        x: left + 620,
         y: y + 14,
         width: 130,
         height: 28,
@@ -112,9 +134,24 @@ export class WorkshopScene extends RoomScene {
       });
       this.content.add(repairBtn);
 
+      const outfitBtn = new Button({
+        scene: this,
+        x: left + 770,
+        y: y + 14,
+        width: 90,
+        height: 28,
+        label: 'Outfit',
+        onClick: () => {
+          this.outfitPlaneId = plane.id;
+          this.scrollTo(0);
+          this.rebuild();
+        },
+      });
+      this.content.add(outfitBtn);
+
       const renameBtn = new Button({
         scene: this,
-        x: left + 850,
+        x: left + 880,
         y: y + 14,
         width: 90,
         height: 28,
@@ -136,6 +173,103 @@ export class WorkshopScene extends RoomScene {
       this.content.add(renameBtn);
       y += 36;
     }
+  }
+
+  /** Focused detail view for a single plane — three upgrade-category
+   *  panels showing the currently-equipped option (if any) and every
+   *  available upgrade with its price. Buying replaces the previously
+   *  equipped upgrade in that category. */
+  private buildOutfitView() {
+    const state = GameState.get();
+    const me = state.human;
+    const plane = me.planes.find(p => p.id === this.outfitPlaneId);
+    if (!plane) {
+      // Plane was sold / crashed while in this view — bounce back.
+      this.outfitPlaneId = null;
+      this.buildBuyAndFleetView();
+      return;
+    }
+    const b = this.panelBounds;
+    const left = b.x + 30;
+    let y = b.y + 80;
+
+    const backBtn = new Button({
+      scene: this,
+      x: left + 50, y, width: 110, height: 28,
+      label: '← Back',
+      onClick: () => {
+        this.outfitPlaneId = null;
+        this.scrollTo(0);
+        this.rebuild();
+      },
+    });
+    this.content.add(backBtn);
+    this.addText(left + 130, y - 8, `Outfitting ${plane.name}  ·  ${plane.model.name}`, 16, COLORS.accentText);
+    this.addText(left + 130, y + 14,
+      `Cash: ${formatMoney(me.cash)}  ·  one upgrade per category. Buying replaces the current one.`,
+      12, COLORS.textDim);
+    y += 56;
+
+    const categories: Array<{ id: UpgradeCategory; label: string; tagline: string }> = [
+      { id: 'livery',        label: 'Livery',         tagline: 'Cosmetic — small reputation drip per successful arrival.' },
+      { id: 'interior',      label: 'Interior',       tagline: 'Seating — multiplicative bonus to load factor.' },
+      { id: 'entertainment', label: 'Entertainment',  tagline: 'In-flight services — additional load-factor bump.' },
+    ];
+
+    for (const cat of categories) {
+      const equippedId = plane.upgrades[cat.id];
+      const equipped = equippedId ? getUpgrade(equippedId) : undefined;
+      this.addText(left, y, cat.label, 16, COLORS.accentText);
+      this.addText(left + 110, y + 4, cat.tagline, 11, COLORS.textDim);
+      this.addText(left, y + 22, `Equipped: ${equipped ? equipped.name : '— none —'}`,
+        13, equipped ? '#ffc857' : COLORS.textDim);
+      if (equipped) {
+        const removeBtn = new Button({
+          scene: this,
+          x: left + 380, y: y + 28, width: 110, height: 24,
+          label: 'Remove',
+          onClick: () => {
+            delete plane.upgrades[cat.id];
+            this.rebuild();
+          },
+        });
+        this.content.add(removeBtn);
+      }
+      y += 50;
+
+      for (const u of UPGRADES.filter(u => u.category === cat.id)) {
+        const isEquipped = u.id === equippedId;
+        const canAfford = me.cash >= u.price;
+        this.addText(left + 16, y, u.name, 13, isEquipped ? '#7be08a' : COLORS.text);
+        this.addText(left + 200, y, formatMoney(u.price), 12, canAfford ? COLORS.text : '#ff9aa6');
+        if (u.loadFactorBonus) {
+          this.addText(left + 300, y, `+${Math.round(u.loadFactorBonus * 100)}% LF`, 12, COLORS.textDim);
+        }
+        if (u.reputationPerFlight) {
+          this.addText(left + 380, y, `+${u.reputationPerFlight.toFixed(2)} rep/flight`, 12, COLORS.textDim);
+        }
+        this.addText(left + 540, y + 2, u.description, 11, COLORS.textDim);
+
+        const btn = new Button({
+          scene: this,
+          x: left + 900, y: y + 8, width: 110, height: 22,
+          label: isEquipped ? '✓ Installed' : (canAfford ? 'Install' : 'Too expensive'),
+          onClick: () => {
+            if (isEquipped) return;
+            if (me.cash < u.price) return;
+            me.cash -= u.price;
+            plane.upgrades[cat.id] = u.id;
+            sound.play('buy');
+            this.rebuild();
+          },
+          disabled: isEquipped || !canAfford,
+        });
+        this.content.add(btn);
+        y += 24;
+      }
+      y += 22;
+    }
+    this.reportContentBottom(y);
   }
 
   /** Per-model economics tooltip — fuel cost per km, break-even passengers, $/seat. */

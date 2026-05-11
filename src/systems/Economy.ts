@@ -3,6 +3,7 @@ import { Plane } from '../state/Plane';
 import { Route } from '../state/Route';
 import { getCity, getPlaneModel, DEFAULT_AIRLINES, HOME_AIRPORT } from '../state/catalog';
 import { getDemandMult } from '../state/demandModifiers';
+import { planeLoadFactorBonus } from '../state/upgrades';
 import { clock } from './Clock';
 
 /** Fuel price in $ per liter (drifts day to day, mean-reverting to FUEL_BASELINE). */
@@ -123,6 +124,10 @@ export function flightProfit(plane: Plane, route: Route): { revenue: number; fue
     const threshold = state.settings.minLoadFactorForTakeoff;
     if (threshold > 0 && lf < threshold) lf = threshold;
   }
+  // Per-plane interior + entertainment upgrades multiply the effective load
+  // factor — full business cabin + streaming suite + WiFi stacks to roughly
+  // +20%. Capped at 1.0 so we never exceed seat count.
+  lf = Math.min(1, lf * planeLoadFactorBonus(plane.upgrades));
   const passengers = Math.floor(plane.model.seats * lf);
   const revenue = passengers * route.ticketPrice;
   const fuel = fuelCost(plane, route.distanceKm);
