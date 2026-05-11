@@ -149,8 +149,12 @@ export interface GameSnapshot {
   /** City id of the human's currently-focused hub (Travel Agency, AirportScene
    *  title). Optional for backwards-compat. */
   activeHub?: string;
-  /** Net-worth milestones the human has already crossed. */
+  /** Net-worth milestones the human has already crossed. Legacy save field —
+   *  newer saves write `achievementsUnlocked` instead; loadFrom falls back
+   *  to this when the new field is missing. */
   milestonesReached?: string[];
+  /** Every achievement id the human has unlocked (wealth tiers + others). */
+  achievementsUnlocked?: string[];
   /** Career stats. Optional for backwards-compat with pre-stats saves. */
   stats?: GameStats;
 }
@@ -199,9 +203,11 @@ export class GameState {
   /** City id of the human's currently-focused hub. Travel Agency uses this as
    *  "where am I opening routes from"; AirportScene shows it in the title. */
   activeHub: string = HOME_AIRPORT;
-  /** Ids of net-worth milestones the human has crossed. Tracked so each tier
-   *  fires its news entry exactly once. */
-  milestonesReached: string[] = [];
+  /** Ids of achievements the human has unlocked (wealth tiers + everything
+   *  else in the registry). Tracked so each unlock fires its news entry
+   *  exactly once. Pre-rename saves use `milestonesReached`; loadFrom falls
+   *  back to that when this field is absent. */
+  achievementsUnlocked: string[] = [];
 
   /** Career stats for the human. Updated cumulatively by Flights and the
    *  room scenes; rendered in the Stats panel + game-over screen. */
@@ -252,7 +258,10 @@ export class GameState {
     s.settings = { ...DEFAULT_SETTINGS, ...(snap.settings ?? {}) };
     s.balanceVersion = snap.balanceVersion ?? 0;
     s.activeHub = snap.activeHub ?? HOME_AIRPORT;
-    s.milestonesReached = [...(snap.milestonesReached ?? [])];
+    // Achievements: prefer the new field; fall back to the legacy
+    // `milestonesReached` so pre-rename saves carry their unlocked wealth
+    // tiers across without re-firing them.
+    s.achievementsUnlocked = [...(snap.achievementsUnlocked ?? snap.milestonesReached ?? [])];
     s.stats = { ...DEFAULT_STATS, ...(snap.stats ?? {}) };
     restoreModifiers(snap.demandModifiers);
     setFuelPrice(snap.fuelPrice);
@@ -287,7 +296,7 @@ export class GameState {
       settings: { ...this.settings },
       balanceVersion: this.balanceVersion,
       activeHub: this.activeHub,
-      milestonesReached: [...this.milestonesReached],
+      achievementsUnlocked: [...this.achievementsUnlocked],
       stats: { ...this.stats },
     };
   }

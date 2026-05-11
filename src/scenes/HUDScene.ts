@@ -150,7 +150,7 @@ export class HUDScene extends Phaser.Scene {
 
     // Seed the celebrated set from what's already in the save so a reload
     // doesn't re-fire popups for milestones the player has already seen.
-    this.celebratedMilestones = new Set(GameState.get().milestonesReached);
+    this.celebratedMilestones = new Set(GameState.get().achievementsUnlocked);
   }
 
   private makeSpeedButton(x: number, y: number, label: string, onClick: () => void): Phaser.GameObjects.Text {
@@ -185,7 +185,7 @@ export class HUDScene extends Phaser.Scene {
   /** If a milestone was crossed since we last looked, show its celebration. */
   private checkNewMilestones() {
     if (this.activeMilestonePopup) return;        // one popup at a time
-    const reached = GameState.get().milestonesReached;
+    const reached = GameState.get().achievementsUnlocked;
     for (const id of reached) {
       if (this.celebratedMilestones.has(id)) continue;
       const m = MILESTONES.find(x => x.id === id);

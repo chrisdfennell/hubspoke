@@ -9,6 +9,51 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Achievements / medals
+
+Unified achievement system that includes the four existing net-worth
+milestones plus 23 new ones across operations, fleet, network, and
+notable categories. All visible in the Stats panel with progress
+bars for locked ones and a green ✓ Unlocked indicator for done.
+
+**Registry** ([achievements.ts](src/state/achievements.ts))
+- 27 achievements total, organized into 5 categories:
+  Wealth (4 — the existing $10M / $100M / $500M / $1B milestones,
+  same ids for save-compat), Operations (8 — first flight, 100 /
+  1,000 / 10,000 flights, 1k / 10k / 100k / 1M passengers), Fleet
+  (4 — 3 / 5 / 10 / 20 planes), Network (5 — 3 / 5 / 10 routes,
+  2 / 4 hubs), Notable (4 — One month / One year / Hard lessons /
+  Big payday).
+- Each achievement has `progress(state)` to read live state and a
+  `target`. Unlock fires when `progress >= target`.
+
+**System** ([Milestones.ts](src/systems/Milestones.ts))
+- `checkMilestones` renamed to `checkAchievements` — now iterates
+  the full ACHIEVEMENTS registry instead of just the 4 wealth
+  tiers. `MILESTONES` is now a derived filter (`category === 'wealth'`)
+  preserved for HUDScene's celebration-popup eligibility check —
+  wealth-tier unlocks get the big banner; everything else fires a
+  quieter news entry only.
+- News copy reads `★ Milestone: …` for wealth tiers (unchanged)
+  and `★ Achievement: …` for everything else.
+
+**State** ([GameState.ts](src/state/GameState.ts))
+- Renamed `milestonesReached` → `achievementsUnlocked` (a string[]
+  of unlocked ids). Save migration is transparent: `loadFrom` uses
+  `snap.achievementsUnlocked ?? snap.milestonesReached ?? []`, so
+  any existing wealth-tier unlocks carry across without re-firing.
+  HUDScene and GameOverScene updated to read the new field.
+
+**UI** ([StatsScene.ts](src/scenes/rooms/StatsScene.ts))
+- New Achievements section below the existing career stats block.
+  Shows total progress (X / 27) at the top, then category-by-
+  category groupings. Each row has a medal icon, name +
+  description, and either a green "✓ Unlocked" pill OR a progress
+  bar with `current / target` count. Money targets format as
+  $-strings; counter targets format as commas-separated numbers.
+
+---
+
 ## 2026-05-11 — Bugfix: weekly newspaper fires one day late
 
 User reported reaching day 8 with no paper popping up. Tracing:

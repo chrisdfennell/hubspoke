@@ -2,6 +2,7 @@ import { GameState } from '../state/GameState';
 import { Player } from '../state/Player';
 import { portfolioValue } from './Stocks';
 import { clock } from './Clock';
+import { ACHIEVEMENTS, Achievement, isUnlocked } from '../state/achievements';
 
 export interface Milestone {
   id: string;
@@ -13,17 +14,16 @@ export interface Milestone {
 }
 
 /**
- * Net-worth tiers the human earns headlines for. Tracking milestones gives the
- * mid-game some forward arrows beyond "make money / take over rivals" — the
- * existing victory conditions are eliminate-all-rivals or hit a billion via
- * `BILLIONAIRE_VICTORY` below.
+ * Net-worth tiers that fire the big HUDScene celebration popup. Filtered
+ * from the unified ACHIEVEMENTS registry — these are the legacy four
+ * milestones; non-wealth achievements unlock more quietly via news only.
+ *
+ * Kept exported for HUDScene which uses this list to decide which newly-
+ * unlocked achievement ids deserve a celebration banner.
  */
-export const MILESTONES: Milestone[] = [
-  { id: 'first-10m',  threshold:    10_000_000, label: 'First $10M net worth',  flavor: 'Trade press notices.' },
-  { id: 'first-100m', threshold:   100_000_000, label: 'First $100M net worth', flavor: 'You are now a serious airline.' },
-  { id: 'first-500m', threshold:   500_000_000, label: 'First $500M net worth', flavor: 'Investors are circling.' },
-  { id: 'first-1b',   threshold: 1_000_000_000, label: '$1 BILLION net worth',  flavor: 'You\'ve built an empire.' },
-];
+export const MILESTONES: Milestone[] = ACHIEVEMENTS
+  .filter(a => a.category === 'wealth')
+  .map(a => ({ id: a.id, threshold: a.target, label: a.name, flavor: a.description }));
 
 /** Threshold that triggers the alternative "billionaire" victory in HUDScene. */
 export const BILLIONAIRE_VICTORY = 1_000_000_000;
@@ -33,23 +33,34 @@ export function netWorth(player: Player): number {
   return player.cash + player.savings + portfolioValue(player) - player.loan;
 }
 
-/** Fire any milestone news entries the human has just crossed since the last
- *  check. Idempotent — already-reached milestones are remembered in the save. */
-export function checkMilestones() {
+/**
+ * Check every achievement against the live state and unlock any that have
+ * crossed their target since the last check. Pushes a news entry per
+ * unlock — wealth-tier ones additionally fire HUDScene's celebration popup
+ * (which polls `state.achievementsUnlocked` filtered by MILESTONES).
+ *
+ * Idempotent — already-unlocked ids are skipped, and the result is stored
+ * back on `state.achievementsUnlocked`.
+ */
+export function checkAchievements() {
   const state = GameState.get();
-  const me = state.human;
-  const nw = netWorth(me);
-  const reached = new Set(state.milestonesReached);
-  for (const m of MILESTONES) {
-    if (reached.has(m.id)) continue;
-    if (nw < m.threshold) continue;
-    reached.add(m.id);
-    const tail = m.flavor ? `  ${m.flavor}` : '';
-    state.pushNews(`★ Milestone: ${m.label}.${tail}`);
+  const reached = new Set(state.achievementsUnlocked);
+  for (const a of ACHIEVEMENTS) {
+    if (reached.has(a.id)) continue;
+    if (!isUnlocked(a, state)) continue;
+    reached.add(a.id);
+    state.pushNews(`★ ${headlineFor(a)}`);
   }
-  state.milestonesReached = [...reached];
+  state.achievementsUnlocked = [...reached];
+}
+
+function headlineFor(a: Achievement): string {
+  if (a.unlockedHeadline) return a.unlockedHeadline;
+  // Wealth tier reads as a Milestone; others read as Achievement.
+  const prefix = a.category === 'wealth' ? 'Milestone' : 'Achievement';
+  return `${prefix}: ${a.name}.${a.description ? `  ${a.description}` : ''}`;
 }
 
 export function registerMilestoneHooks() {
-  clock.onDay(() => checkMilestones());
+  clock.onDay(() => checkAchievements());
 }
