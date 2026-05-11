@@ -135,6 +135,18 @@ export class SettingsScene extends RoomScene {
     });
     y += 56;
 
+    // -- Weekly newspaper modal --
+    this.addText(left, y, 'Weekly newspaper', 14);
+    this.addText(left + 8, y + 22,
+      'Every 7 in-game days, pop a paper-styled summary of the week — headlines, your numbers, passenger letters.',
+      11, COLORS.textDim);
+    this.addToggle(rightEdge, y + 8, settings.showWeeklyPaper, (next) => {
+      settings.showWeeklyPaper = next;
+      saveNow();
+      this.rebuild();
+    });
+    y += 56;
+
     // -- News ticker filter --
     this.addText(left, y, 'News ticker categories', 14);
     this.addText(left + 8, y + 22,

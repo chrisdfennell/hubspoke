@@ -9,6 +9,59 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Weekly newspaper modal
+
+Gives the just-shipped passenger feedback (and the rest of the news
+feed) actual weight by pacing it. Every 7 in-game days, a paper-styled
+modal pops with the week's summary. Player reads at their own pace —
+HUDScene is paused while the paper is up so the clock stops.
+
+**System** ([Newspaper.ts](src/systems/Newspaper.ts))
+- `tickNewspaper()` is called from a `clock.onDay` hook. Snapshots
+  cumulative stats (flights / passengers / revenue / fuel) plus the
+  player's cash, reputation, and net worth on day 1 baseline. On the
+  7th subsequent day, diffs current vs. snapshot to build the week's
+  deltas, then snapshots again for the next week.
+- The week's news is filtered out of `state.news` by date comparison
+  (`dateMin(item.date) >= dateMin(weekStart)`) and split into
+  headlines (everything else) and letters (`💬`-prefixed passenger
+  quotes from the new feedback system).
+- Module-scope state (`daysSincePaper`, `lastSnap`, `pending`) is
+  reset on `BootScene.go()` so a new run on the same tab doesn't
+  inherit a stale baseline from the previous game.
+- `pending` is the queued paper; HUDScene polls
+  `consumePendingPaper()` each tick and launches NewspaperScene when
+  one is available. Kept here (not on GameState) because it's
+  transient UI — shouldn't persist with the save.
+
+**Scene** ([NewspaperScene.ts](src/scenes/NewspaperScene.ts))
+- Modal-style: dark backdrop + a 720×590 cream paper panel with a
+  serif (Georgia) masthead, body, and accent-red section headers.
+  Pauses HUDScene on create, resumes on dismiss (Continue button or
+  Esc or Enter).
+- Three sections, drawn top-to-bottom with a Y cursor so they flow
+  naturally regardless of how many items each one has:
+  - **Headlines** — the week's non-passenger news (capped at 8),
+    bulleted, wrapped to panel width.
+  - **The Week in Numbers** — 2-column grid: Flights / Revenue,
+    Passengers / Fuel, Reputation (▲▼ delta) / Cash (▲▼ delta),
+    Net worth (▲▼ delta).
+  - **Letters to the Editor** — the week's 💬 quotes (capped at 5),
+    with the prefix stripped (the section header already labels
+    them), italic, indented.
+
+**Wiring**
+- `registerNewspaperHooks()` registered once in BootScene.create()
+  alongside the existing system hooks.
+- New `showWeeklyPaper: boolean` in GameSettings (default `true`).
+  Setting toggle added between "Show competitor prices" and the news
+  ticker filters in
+  [SettingsScene.ts](src/scenes/rooms/SettingsScene.ts) so players
+  who find it disruptive can flip it off.
+- Scene added to the `main.ts` scene registry.
+
+---
+
 ## 2026-05-11 — Passenger feedback drives reputation
 
 Every revenue arrival now lands a small reputation delta based on what

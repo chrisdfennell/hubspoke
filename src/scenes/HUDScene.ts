@@ -11,6 +11,7 @@ import { DIFFICULTIES } from '../state/Difficulty';
 import { netWorth, BILLIONAIRE_VICTORY, MILESTONES, Milestone } from '../systems/Milestones';
 import { Modal } from '../ui/Modal';
 import { getCEO } from '../state/ceos';
+import { consumePendingPaper } from '../systems/Newspaper';
 
 export class HUDScene extends Phaser.Scene {
   private dateText!: Phaser.GameObjects.Text;
@@ -169,6 +170,16 @@ export class HUDScene extends Phaser.Scene {
     this.tickTicker(dt);
     this.checkGameOver();
     this.checkNewMilestones();
+    this.checkPendingPaper();
+  }
+
+  /** When the Newspaper system has queued a weekly paper, launch its scene
+   *  on the next available frame. Guarded so we don't double-launch if a
+   *  paper is already up. */
+  private checkPendingPaper() {
+    if (this.scene.isActive('NewspaperScene')) return;
+    const paper = consumePendingPaper();
+    if (paper) this.scene.launch('NewspaperScene', { paper });
   }
 
   /** If a milestone was crossed since we last looked, show its celebration. */

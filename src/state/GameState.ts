@@ -47,6 +47,9 @@ export interface GameSettings {
   /** When false, route tooltips hide rival pricing entirely — you fly blind
    *  against the competition. */
   showCompetitorPrices: boolean;
+  /** When true, a paper-styled weekly summary pops every 7 in-game days
+   *  with headlines, the week's stats, and passenger letters. */
+  showWeeklyPaper: boolean;
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -61,6 +64,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   eventSeverity: 'normal',
   autoRepairThreshold: 0,
   showCompetitorPrices: true,
+  showWeeklyPaper: true,
 };
 
 /** Bump when a backwards-incompatible balance change ships. The migrator in

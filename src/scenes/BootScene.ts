@@ -13,6 +13,7 @@ import { registerSabotageHooks } from '../systems/Sabotage';
 import { registerLoungeHooks, refreshContacts } from '../systems/Lounge';
 import { registerMilestoneHooks } from '../systems/Milestones';
 import { registerStatsHooks } from '../systems/Stats';
+import { registerNewspaperHooks, resetNewspaper } from '../systems/Newspaper';
 import {
   registerAutoSave, saveNow, listSlots, loadSlot, deleteSlot, setActiveSlot,
   SlotInfo, MAX_SLOTS,
@@ -41,6 +42,7 @@ export class BootScene extends Phaser.Scene {
     registerLoungeHooks();
     registerMilestoneHooks();
     registerStatsHooks();
+    registerNewspaperHooks();
 
     this.cameras.main.setBackgroundColor(COLORS.bg);
 
@@ -343,6 +345,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   private go() {
+    // Fresh baseline for the weekly paper — module state survives the page
+    // load, so clear it whenever a game starts to avoid stale snaps from a
+    // prior run on the same tab.
+    resetNewspaper();
     refreshOffers();
     refreshContacts();
     registerAutoSave();
