@@ -9,6 +9,59 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Passenger feedback drives reputation
+
+Every revenue arrival now lands a small reputation delta based on what
+the passengers actually experienced, and a roll has them say something
+about it in the news ticker. Closes the loop between the upgrade /
+maintenance / pricing systems and the rep number sitting in the HUD.
+
+**Sentiment → reputation** (always applies, every flight)
+([PassengerFeedback.ts](src/systems/PassengerFeedback.ts), wired in
+[Flights.ts](src/systems/Flights.ts))
+
+Each arrival rolls a sentiment delta capped to `[-0.10, +0.05]`:
+
+- **Bare-metal penalty** — `-0.03` if the plane has no livery, no
+  interior, and no entertainment equipped. Passengers notice the
+  difference between "an airline that cares" and "the cheapest fleet
+  on the apron." Composes with the existing `planeReputationPerFlight`
+  drip so equipping any upgrade flips both signals at once.
+- **Plane condition** — `+0.02` above 90%; `-0.02` between 40% and 60%;
+  `-0.05` below 40%. A rattling neglected fleet drips rep down even
+  when nothing crashes.
+- **Ticket price vs. fair** — `-0.04` when priced >1.3× the suggested
+  fair fare (gouging); `+0.02` when priced <0.85× (bargain). Pairs the
+  pricing dial with a soft reputation cost so price-maxing isn't free.
+- **Cramped cabin** — `-0.02` when load factor >95%. The flip side of
+  "great LF" — packed flights are uncomfortable.
+
+At ~50 arrivals/day for an active mid-game fleet, a maxed-out tidy
+operation drips +1 to +2 rep/day passively; a bare neglected
+overpriced one drips down at a similar rate. Per-flight cap keeps a
+single rough flight from doing real damage.
+
+**Sentiment → quotes** (rolls 8% chance per arrival)
+
+When the roll hits, picks from weighted template pools matching the
+same flight state — condition, equipped upgrades, price ratio, load
+factor, current reputation — so the chatter feels earned. Examples:
+
+- `💬 "Cabin smelled like burnt coffee for two hours. Sort it out,
+  Honey Air." — disappointed` (low condition)
+- `💬 "$320 LAX→JFK? Daylight robbery from Honey Air." — budget
+  traveler` (price ratio > 1.3)
+- `💬 "Honey Air's lie-flat suites are worth every penny." — premium
+  passenger` (interior upgrade equipped)
+- `💬 "Got me to JFK on time. Can't complain about Honey Air." —
+  satisfied` (neutral / mid-rep catch-all)
+
+Quotes are 💬-prefixed; HUDScene.classifyNews now routes that prefix to
+the 'mine' category so the existing "Your airline" ticker toggle
+controls them.
+
+---
+
 ## 2026-05-11 — Tarmac passengers
 
 The single biggest "feels like Airline Tycoon" beat we were still missing:

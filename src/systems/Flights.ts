@@ -9,6 +9,7 @@ import { distanceKm, getCity } from '../state/catalog';
 import { Player } from '../state/Player';
 import { getCEO } from '../state/ceos';
 import { planeReputationPerFlight } from '../state/upgrades';
+import { maybePassengerFeedback } from './PassengerFeedback';
 
 /** Convert a GameDate to a comparable minute count since year 0. Simplified. */
 function dateToMinutes(d: GameDate): number {
@@ -236,6 +237,7 @@ export function landArrivedPlanes() {
             `${plane.name} arrived in ${arrivedAt.toUpperCase()} — ${result.passengers} pax, ${sign}$${Math.round(result.profit).toLocaleString('en-US')}.`
           );
           sound.play('land');
+          maybePassengerFeedback(player, plane, route, result);
         }
         // Post-landing mishap check. A neglected plane (condition < 0.5)
         // rolls for an incident; the lower the condition, the higher the

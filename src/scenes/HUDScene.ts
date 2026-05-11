@@ -313,6 +313,8 @@ export class HUDScene extends Phaser.Scene {
   private static classifyNews(text: string, myName: string): 'mine' | 'rival' | 'event' | 'milestone' {
     if (text.startsWith('★')) return 'milestone';
     if (text.startsWith('⚠') || text.startsWith('✦') || text.startsWith('·')) return 'event';
+    // 💬 — passenger feedback quotes are always about the human's airline.
+    if (text.startsWith('💬')) return 'mine';
     if (text.includes(myName)) return 'mine';
     return 'rival';
   }
