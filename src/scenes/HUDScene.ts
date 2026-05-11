@@ -169,7 +169,17 @@ export class HUDScene extends Phaser.Scene {
   private makeSpeedButton(x: number, y: number, label: string, onClick: () => void): Phaser.GameObjects.Text {
     const w = 32, h = 24;
     const r = this.add.rectangle(x, y, w, h, 0x14304a).setStrokeStyle(1, 0x88c0e0);
-    const t = this.add.text(x, y, label, { fontFamily: 'Segoe UI', fontSize: '12px', color: COLORS.text }).setOrigin(0.5);
+    // Phaser text bounds include descender padding (font line-height), so
+    // setOrigin(0.5) centers the BOX rather than the visual baseline — in
+    // a 24px-tall button that leaves the glyph riding noticeably high.
+    // Nudging y down by 2px puts the visible ink in the geometric center.
+    // Also use the full font fallback stack so a system missing Segoe UI
+    // doesn't render with a different (sans-serif) baseline either.
+    const t = this.add.text(x, y + 2, label, {
+      fontFamily: 'Segoe UI, Tahoma, sans-serif',
+      fontSize: '12px',
+      color: COLORS.text,
+    }).setOrigin(0.5);
     r.setInteractive({ useHandCursor: true });
     r.on('pointerover', () => r.setFillStyle(0x2a5780));
     r.on('pointerout', () => r.setFillStyle(0x14304a));
