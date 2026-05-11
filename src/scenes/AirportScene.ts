@@ -553,8 +553,21 @@ export class AirportScene extends Phaser.Scene {
     this.parkedSig = sig;
     this.parkedLayer.removeAll(true);
     for (const { plane, gateIdx } of tuples) {
-      const icon = this.makePlaneIcon(this.gateXs[gateIdx], this.apronY, plane.model.seats, me.color, 0);
+      const x = this.gateXs[gateIdx];
+      const icon = this.makePlaneIcon(x, this.apronY, plane.model.seats, me.color, 0);
       this.parkedLayer.add(icon);
+      // Short tail-number label above the plane. Plane.id is sequential ("p1",
+      // "p2", …) and globally unique, so it doubles as a stable per-plane
+      // tag — easier to track which plane is which when the fleet grows past
+      // a handful. Placed at apronY - 14 to clear the BOARDING bar that
+      // sits at apronY - 24 during a takeoff.
+      const idLabel = this.add.text(x, this.apronY - 14, plane.id.toUpperCase(), {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '9px',
+        color: '#a0b0c4',
+        fontStyle: 'bold',
+      }).setOrigin(0.5);
+      this.parkedLayer.add(idLabel);
     }
   }
 

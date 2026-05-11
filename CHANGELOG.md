@@ -9,6 +9,41 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Sponsor section in the weekly newspaper + plane numbering
+
+Two compounding additions to the just-shipped systems.
+
+**Sponsor Watch section** — the weekly newspaper now includes a
+"SPONSOR WATCH" section between The Week in Numbers and Letters
+to the Editor, surfacing what happened with sponsor contracts:
+
+- **Resolved this week**: one-line summary per contract that
+  completed (★), failed (⚠), or expired (·) during the week.
+  Filtered to the human's contracts only.
+- **In progress**: one-line snapshot per active contract showing
+  current progress / target / percent and destination.
+- **New offers**: one-line ping for each available offer with the
+  brand + pitch, nudging the player toward Office → Sponsors.
+
+Plumbing: `WeekSnap` now also captures `sponsorCompletedLen` (the
+length of `state.sponsorCompleted` at snapshot time). At week-end,
+`tickNewspaper` slices the new entries since that index, filters
+to the human, and bundles them into `WeeklyPaper.sponsorResolved`
+alongside fresh `sponsorActive` and `sponsorOffers` snapshots.
+Section auto-hides when all three lists are empty. Newspaper
+panel grew from 590 → 650 px tall to fit the new section.
+
+**Plane numbering on the apron** — every parked plane on your
+active hub now shows its short id (e.g., `P3`) as a 9 px bold
+label above the icon, 14 px above `apronY` so it clears the
+BOARDING bar during takeoff. `plane.id` is sequential and
+globally unique, so it doubles as a stable per-plane tag for
+tracking which plane is which once the fleet grows past a
+handful. Visiting rival planes keep their airline-name label
+underneath instead.
+
+---
+
 ## 2026-05-11 — Sponsor contracts
 
 First proactive goal layer on top of the steady-state economy. Brand

@@ -1,4 +1,5 @@
 import { GameState, GameDate } from '../state/GameState';
+import { SponsorContract } from '../state/Sponsor';
 import { netWorth } from './Milestones';
 import { clock } from './Clock';
 
@@ -13,6 +14,9 @@ interface WeekSnap {
   cash: number;
   reputation: number;
   netWorth: number;
+  /** Length of state.sponsorCompleted at snapshot time. Entries appended
+   *  after this index are the resolutions that happened during the week. */
+  sponsorCompletedLen: number;
 }
 
 export interface WeeklyPaper {
@@ -34,6 +38,14 @@ export interface WeeklyPaper {
   reputationEnd: number;
   netWorthDelta: number;
   netWorthEnd: number;
+  /** Snapshot of the human's currently-active sponsor contracts (in progress). */
+  sponsorActive: SponsorContract[];
+  /** Sponsor contracts that resolved during the week (completed / failed /
+   *  expired) — newest entries from state.sponsorCompleted since the last
+   *  paper. Filtered to the human only. */
+  sponsorResolved: SponsorContract[];
+  /** Sponsor offers currently available, in case the player missed them. */
+  sponsorOffers: SponsorContract[];
 }
 
 /**
@@ -58,6 +70,7 @@ function takeSnap(): WeekSnap {
     cash: me.cash,
     reputation: me.reputation,
     netWorth: netWorth(me),
+    sponsorCompletedLen: s.sponsorCompleted.length,
   };
 }
 
@@ -93,6 +106,12 @@ export function tickNewspaper(): WeeklyPaper | null {
   const letters   = recent.filter(n =>  n.text.startsWith('💬'));
   const headlines = recent.filter(n => !n.text.startsWith('💬'));
 
+  const me = state.human;
+  const resolvedThisWeek = state.sponsorCompleted
+    .slice(lastSnap.sponsorCompletedLen)
+    .filter(s => s.ownerId === me.id);
+  const activeForMe = state.sponsorActive.filter(s => s.ownerId === me.id);
+
   const paper: WeeklyPaper = {
     weekStartDate: { ...lastSnap.date },
     weekEndDate:   { ...now.date },
@@ -108,6 +127,9 @@ export function tickNewspaper(): WeeklyPaper | null {
     reputationEnd:    now.reputation,
     netWorthDelta:    now.netWorth   - lastSnap.netWorth,
     netWorthEnd:      now.netWorth,
+    sponsorActive:    activeForMe,
+    sponsorResolved:  resolvedThisWeek,
+    sponsorOffers:    [...state.sponsorOffers],
   };
 
   lastSnap = now;

@@ -2,7 +2,12 @@ import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { WeeklyPaper } from '../systems/Newspaper';
 import { formatMoney } from '../systems/Clock';
+import { getCity } from '../state/catalog';
 import { Button } from '../ui/Button';
+
+function cityShort(id: string): string {
+  return getCity(id).name;
+}
 
 /**
  * Weekly newspaper modal. Launched from HUDScene when the Newspaper system
@@ -38,7 +43,7 @@ export class NewspaperScene extends Phaser.Scene {
 
     // Paper panel.
     const panelW = 720;
-    const panelH = 590;
+    const panelH = 650;
     const panelX = (GAME_WIDTH - panelW) / 2;
     const panelY = (GAME_HEIGHT - panelH) / 2;
     const cream = 0xece5d3;
@@ -79,6 +84,7 @@ export class NewspaperScene extends Phaser.Scene {
     y += 14;
     y = this.renderNumbers(contentX, y, contentW, ink, accent);
     y += 14;
+    y = this.renderSponsors(contentX, y, contentW, ink, inkDim, accent);
     y = this.renderLetters(contentX, y, contentW, ink, inkDim, accent);
 
     // ---- Continue button + ESC hint ----
@@ -178,6 +184,62 @@ export class NewspaperScene extends Phaser.Scene {
       y += 18;
     }
     return y;
+  }
+
+  private renderSponsors(x: number, y: number, w: number, ink: string, inkDim: string, accent: string): number {
+    const { sponsorActive, sponsorResolved, sponsorOffers } = this.paper;
+    if (sponsorActive.length === 0 && sponsorResolved.length === 0 && sponsorOffers.length === 0) {
+      return y;
+    }
+
+    this.add.text(x, y, 'SPONSOR WATCH', {
+      fontFamily: 'Georgia, serif',
+      fontSize: '14px',
+      color: accent,
+      fontStyle: 'bold',
+    });
+    y += 22;
+
+    // Resolved (★/⚠) get a one-line summary each.
+    for (const s of sponsorResolved.slice(0, 3)) {
+      const marker = s.status === 'completed' ? '★'
+                   : s.status === 'failed'    ? '⚠'
+                   :                            '·';
+      const verb = s.status === 'completed' ? 'fulfilled'
+                 : s.status === 'failed'    ? 'failed'
+                 :                            'expired';
+      this.add.text(x, y, `${marker} ${s.brand} contract ${verb} (→ ${cityShort(s.toCity)}).`, {
+        fontFamily: 'Georgia, serif',
+        fontSize: '12px',
+        color: ink,
+      });
+      y += 18;
+    }
+
+    // Active progress lines.
+    for (const s of sponsorActive.slice(0, 3)) {
+      const pct = Math.min(100, Math.round((s.progress / s.target) * 100));
+      this.add.text(x, y,
+        `In progress — ${s.brand}: ${s.progress.toLocaleString('en-US')} / ${s.target.toLocaleString('en-US')} pax to ${cityShort(s.toCity)} (${pct}%).`, {
+        fontFamily: 'Georgia, serif',
+        fontSize: '12px',
+        color: ink,
+      });
+      y += 18;
+    }
+
+    // Available offers ping.
+    for (const s of sponsorOffers.slice(0, 2)) {
+      this.add.text(x, y, `New offer — ${s.brand} ${s.pitch} to ${cityShort(s.toCity)} (Office → Sponsors).`, {
+        fontFamily: 'Georgia, serif',
+        fontSize: '12px',
+        color: inkDim,
+        fontStyle: 'italic',
+      });
+      y += 18;
+    }
+
+    return y + 14;
   }
 
   private renderLetters(x: number, y: number, w: number, ink: string, inkDim: string, accent: string): number {
