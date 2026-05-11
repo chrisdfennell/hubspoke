@@ -9,6 +9,45 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Plane catalog audit: fix broken B737, A320neo, Q400 niches
+
+Full pass through `PLANE_MODELS` after the ATR range bump exposed three
+trap purchases. All three were "buy it and lose to a cheaper option."
+
+**B737-800 fuel burn was 3× reality** ([catalog.ts](src/state/catalog.ts))
+- Was: `12.5 L/km`. Real B737-800 burns 3-4 L/km.
+- Comparison case: on a 4,000 km route the B737 burnt $28k *more*
+  fuel than the A220-300 to earn only $4k more revenue from extra
+  seats. Strictly worse than the cheaper A220 on every metric except
+  seat count.
+- Fixed → `5.0 L/km`. Slightly worse than reality so the A220 keeps
+  its "modern efficient narrowbody" niche, but the B737's +40 seats
+  over A220 (189 vs 149) now actually translate to ~$15k more profit
+  per long flight.
+
+**A320neo fuel burn was 4× reality**
+- Was: `11.8 L/km` despite being literally the "New Engine Option"
+  variant — the most fuel-efficient narrowbody in service. Real ~3 L/km.
+- Fixed → `4.0 L/km`. Slightly worse than the A220 (3.5) but premium-
+  grade — the +6 seats and +400 km range now justify the $30M premium
+  over A220 and $18M over B737.
+
+**Q400 redundant after the ATR range bump**
+- Was: $30M for +8 seats / faster speed / less than half the range vs
+  the $18M ATR. Hard to justify the $12M premium.
+- Dropped price to **$25M**. Q400 is now "premium short-haul regional"
+  — +8 seats, ~30% faster, half the fuel burn — and ATR is "long-range
+  turboprop workhorse." They occupy different niches by route length.
+
+**What I checked and left alone**: Cessna 208 numbers, ATR-72 (just
+rebalanced), A220-300, B747-400 (fuel inflated but plane is correctly
+profitable only on long high-demand routes), A380-800 (endgame prestige,
+numbers work), all speeds, all maintenance/hr (scale with size), all 31
+city positions (Haversine distance is correct), all city demand values
+(0.6–1.5 spread gives meaningful pricing variance).
+
+---
+
 ## 2026-05-11 — ATR-72 range bump: 1,500 km → 4,500 km
 
 The ATR was undercutting itself as a "step up" plane — at 1,500 km it

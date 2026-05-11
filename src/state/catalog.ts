@@ -65,7 +65,12 @@ export const PLANE_MODELS: PlaneModel[] = [
     cargoCapacityKg: 20_000,
     range: 5400,
     speed: 850,
-    fuelPerKm: 12.5,
+    // Real B737-800 burns ~3-4 L/km; the previous 12.5 made it strictly worse
+    // than the A220-300 (3.5 L/km) on every metric except seat count and
+    // turned the plane into a trap purchase. 5.0 keeps it a touch less
+    // efficient than A220 (representing the older airframe) while letting
+    // its +40 seats over A220 actually translate to higher profit per flight.
+    fuelPerKm: 5.0,
     maintenancePerHour: 280,
     conditionAtPurchase: 1.0,
   },
@@ -78,7 +83,12 @@ export const PLANE_MODELS: PlaneModel[] = [
     cargoCapacityKg: 21_500,
     range: 6300,
     speed: 870,
-    fuelPerKm: 11.8,
+    // "neo" = New Engine Option, the most fuel-efficient narrowbody in
+    // service. Previous 11.8 L/km was ~4x reality and made the plane
+    // pointless next to the cheaper A220. 4.0 puts it slightly worse than
+    // the A220 (3.5) but premium-grade — extra seats + range justify the
+    // $30M price premium over the A220 and $18M over the B737.
+    fuelPerKm: 4.0,
     maintenancePerHour: 290,
     conditionAtPurchase: 1.0,
   },
@@ -99,7 +109,11 @@ export const PLANE_MODELS: PlaneModel[] = [
     id: 'q400',
     name: 'Bombardier Q400',
     manufacturer: 'Bombardier',
-    price: 30_000_000,
+    // Dropped from $30M to $25M to give the Q400 a real niche after the ATR
+    // range bump. Q400 is now "premium short-haul regional" — +8 seats,
+    // ~30% faster, half the fuel burn vs ATR — and ATR is "long-range
+    // turboprop workhorse." Each makes sense for different route lengths.
+    price: 25_000_000,
     seats: 78,
     cargoCapacityKg: 8_000,
     range: 2040,
