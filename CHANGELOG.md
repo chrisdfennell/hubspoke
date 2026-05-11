@@ -9,6 +9,50 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Livery preview + tail-accent on every silhouette
+
+Liveries are no longer cosmetic-name-only — each one now actually
+shows on the plane's tail fin everywhere a silhouette renders. The
+Workshop Outfit view also gains a live hover preview so the player
+can see what a livery looks like before paying for it.
+
+**Accent colors per livery**
+([upgrades.ts](src/state/upgrades.ts))
+- New `accentColor` field on `Upgrade` (livery-only):
+  - Classic Stripe: `0xa0a8b4` (cool gray)
+  - Tropical Sunset: `0xff8855` (warm orange)
+  - Gold Trim: `0xffd700` (gold)
+  - Carbon Matte: `0x2a2a2a` (deep matte)
+- New `liveryAccent(upgrades)` helper returns the equipped livery's
+  accent or `undefined` for un-liveried planes.
+
+**Silhouette tail paints accent**
+([PlaneIcon.ts](src/ui/PlaneIcon.ts))
+- `makePlaneIcon` gains an `accentColor?` parameter that tints the
+  tail fin (turboprop / narrowbody / widebody — all three shapes).
+  When omitted, the tail uses the base airline color so plain
+  un-liveried planes render exactly as before. No regression.
+
+**Apron picks it up automatically**
+([AirportScene.ts](src/scenes/AirportScene.ts))
+- All 6 `makePlaneIcon` call sites in AirportScene (parked, visitor,
+  takeoff anim, landing anim, visitor takeoff/landing) now pass
+  `liveryAccent(plane.upgrades)`. Your fleet's liveries are visible
+  on the apron — equip Carbon Matte and the parked plane's tail
+  goes dark.
+
+**Workshop Outfit preview**
+([WorkshopScene.ts](src/scenes/rooms/WorkshopScene.ts))
+- New preview silhouette in the top-right of the Outfit view,
+  scaled 2×. Defaults to showing the equipped livery's accent.
+- Each livery row gets a transparent interactive rect underneath;
+  hovering anywhere on the row previews that livery's accent on
+  the silhouette above. Mouseout returns to the equipped accent.
+- Buying a livery rebuilds the view; preview now shows the
+  newly-equipped accent as the default.
+
+---
+
 ## 2026-05-11 — Last native dialogs replaced with Modal
 
 Two stragglers from the original save-slot UI still used the browser's

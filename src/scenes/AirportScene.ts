@@ -9,6 +9,7 @@ import { staffShortfall } from '../systems/Personnel';
 import { portfolioValue } from '../systems/Stocks';
 import { getCity, PlaneClass } from '../state/catalog';
 import { makePlaneIcon } from '../ui/PlaneIcon';
+import { liveryAccent } from '../state/upgrades';
 
 interface RoomDef {
   id: string;
@@ -579,7 +580,10 @@ export class AirportScene extends Phaser.Scene {
     this.parkedLayer.removeAll(true);
     for (const { plane, gateIdx, tier } of tuples) {
       const x = this.gateXs[gateIdx];
-      const icon = this.makePlaneIcon(x, this.apronY, plane.model.seats, me.color, 0, plane.model.cls);
+      const icon = this.makePlaneIcon(
+        x, this.apronY, plane.model.seats, me.color, 0, plane.model.cls,
+        liveryAccent(plane.upgrades),
+      );
       this.parkedLayer.add(icon);
       // Short tail-number label above the plane. Plane.id is sequential ("p1",
       // "p2", …) and globally unique, so it doubles as a stable per-plane
@@ -699,6 +703,7 @@ export class AirportScene extends Phaser.Scene {
     for (const p of positions) {
       const icon = this.makePlaneIcon(
         p.x, this.VISITOR_Y, p.plane.model.seats, p.owner.color, 0, p.plane.model.cls,
+        liveryAccent(p.plane.upgrades),
       );
       icon.setScale(0.7);
       this.visitorLayer.add(icon);
@@ -762,7 +767,10 @@ export class AirportScene extends Phaser.Scene {
     this.animatingRivalIds.add(plane.id);
     this.visitorSig = '';   // force visitor-row re-render now that this one's leaving
 
-    const icon = this.makePlaneIcon(startX, this.VISITOR_Y, plane.model.seats, owner.color, startRot, plane.model.cls);
+    const icon = this.makePlaneIcon(
+      startX, this.VISITOR_Y, plane.model.seats, owner.color, startRot, plane.model.cls,
+      liveryAccent(plane.upgrades),
+    );
     icon.setScale(0.9);
     this.flightLayer.add(icon);
 
@@ -802,7 +810,10 @@ export class AirportScene extends Phaser.Scene {
     this.animatingRivalIds.add(plane.id);
     this.visitorSig = '';
 
-    const icon = this.makePlaneIcon(startX, this.runwayY, plane.model.seats, owner.color, flightRot, plane.model.cls);
+    const icon = this.makePlaneIcon(
+      startX, this.runwayY, plane.model.seats, owner.color, flightRot, plane.model.cls,
+      liveryAccent(plane.upgrades),
+    );
     icon.setScale(0.9);
     this.flightLayer.add(icon);
 
@@ -903,7 +914,10 @@ export class AirportScene extends Phaser.Scene {
         return;
       }
 
-      const icon = this.makePlaneIcon(gateX, this.apronY, seats, me.color, startRot, plane.model.cls);
+      const icon = this.makePlaneIcon(
+        gateX, this.apronY, seats, me.color, startRot, plane.model.cls,
+        liveryAccent(plane.upgrades),
+      );
       icon.setScale(1.3); // bigger during animation for visibility
       this.flightLayer.add(icon);
 
@@ -993,7 +1007,10 @@ export class AirportScene extends Phaser.Scene {
     this.activeLandingEndsAt.set(plane.id, this.time.now + this.a(2800));
     const startX = entersFromRight ? GAME_WIDTH + 80 : -80;
     const flightRot = entersFromRight ? Math.PI : 0;
-    const icon = this.makePlaneIcon(startX, this.runwayY, seats, me.color, flightRot, plane.model.cls);
+    const icon = this.makePlaneIcon(
+      startX, this.runwayY, seats, me.color, flightRot, plane.model.cls,
+      liveryAccent(plane.upgrades),
+    );
     icon.setScale(1.3);
     this.flightLayer.add(icon);
 
@@ -1169,8 +1186,9 @@ export class AirportScene extends Phaser.Scene {
   private makePlaneIcon(
     x: number, y: number, seats: number, color: number,
     rotationRad: number, cls: PlaneClass = 'narrowbody',
+    accentColor?: number,
   ): Phaser.GameObjects.Graphics {
-    return makePlaneIcon(this, x, y, seats, color, rotationRad, cls);
+    return makePlaneIcon(this, x, y, seats, color, rotationRad, cls, /*shadow*/ true, accentColor);
   }
 }
 

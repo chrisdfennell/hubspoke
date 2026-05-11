@@ -24,6 +24,7 @@ export function makePlaneIcon(
   x: number, y: number, seats: number, color: number,
   rotationRad: number = 0, cls: PlaneClass = 'narrowbody',
   withShadow: boolean = true,
+  accentColor?: number,
 ): Phaser.GameObjects.Graphics {
   const size = 4 + Math.sqrt(seats) * 0.6;
   const g = scene.add.graphics({ x, y });
@@ -32,6 +33,9 @@ export function makePlaneIcon(
     g.fillStyle(0x000000, 0.28);
     g.fillEllipse(s * 0.15, s * 0.45, s * 2.6, s * 1.4);
   }
+  // Tail color falls back to the base airline color when no livery accent
+  // is set, so plain (un-liveried) planes render exactly as before.
+  const tailColor = accentColor ?? color;
   g.fillStyle(color, 1);
   g.lineStyle(1, 0x000000, 0.7);
 
@@ -60,7 +64,8 @@ export function makePlaneIcon(
     g.fillStyle(0x202020, 0.85);
     g.fillCircle(-s * 0.05,  s * 0.55, s * 0.13);
     g.fillCircle(-s * 0.05, -s * 0.55, s * 0.13);
-    g.fillStyle(color, 1);
+    // Tail fin in livery accent (falls back to base color).
+    g.fillStyle(tailColor, 1);
     g.beginPath();
     g.moveTo(-s * 0.85, 0);
     g.lineTo(-s * 1.0,  s * 0.4);
@@ -96,7 +101,8 @@ export function makePlaneIcon(
     g.fillEllipse(-s * 0.40,  s * 0.95, s * 0.28, s * 0.14);
     g.fillEllipse(-s * 0.15, -s * 0.55, s * 0.32, s * 0.16);
     g.fillEllipse(-s * 0.40, -s * 0.95, s * 0.28, s * 0.14);
-    g.fillStyle(color, 1);
+    // Tail fin in livery accent (falls back to base color).
+    g.fillStyle(tailColor, 1);
     g.beginPath();
     g.moveTo(-s * 0.95, 0);
     g.lineTo(-s * 1.2,  s * 0.5);
@@ -127,6 +133,8 @@ export function makePlaneIcon(
     g.closePath();
     g.fillPath();
     g.strokePath();
+    // Tail fin in livery accent (falls back to base color).
+    g.fillStyle(tailColor, 1);
     g.beginPath();
     g.moveTo(-s * 0.85, 0);
     g.lineTo(-s * 1.1,  s * 0.4);

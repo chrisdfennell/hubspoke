@@ -11,6 +11,7 @@ import { sound } from '../../systems/Sound';
 import { getCEO } from '../../state/ceos';
 import { UPGRADES, UpgradeCategory, getUpgrade } from '../../state/upgrades';
 import { makePlaneIcon } from '../../ui/PlaneIcon';
+import { liveryAccent } from '../../state/upgrades';
 
 /** Threshold above which buying a plane prompts a confirmation modal —
  *  a B747 / A380 misclick is real money down the drain otherwise. */
@@ -239,6 +240,26 @@ export class WorkshopScene extends RoomScene {
     this.addText(left + 130, y + 14,
       `Cash: ${formatMoney(me.cash)}  ·  one upgrade per category. Buying replaces the current one.`,
       12, COLORS.textDim);
+
+    // Live preview silhouette in the top-right of the outfit panel. The
+    // tail picks up the equipped livery's accentColor; hovering any livery
+    // row below previews that livery's accent without committing the buy.
+    const previewX = b.x + b.w - 80;
+    const previewY = y + 30;
+    this.addText(previewX - 30, previewY + 30, 'Preview', 11, COLORS.textDim);
+    let previewSilhouette: Phaser.GameObjects.Graphics | null = null;
+    const rebuildPreview = (override?: number) => {
+      if (previewSilhouette) previewSilhouette.destroy();
+      const accent = override !== undefined ? override : liveryAccent(plane.upgrades);
+      previewSilhouette = makePlaneIcon(
+        this, previewX, previewY, plane.model.seats, me.color, 0, plane.model.cls,
+        /* shadow */ false, accent,
+      );
+      previewSilhouette.setScale(2);
+      this.content.add(previewSilhouette);
+    };
+    rebuildPreview();
+
     y += 56;
 
     const categories: Array<{ id: UpgradeCategory; label: string; tagline: string }> = [
@@ -271,6 +292,21 @@ export class WorkshopScene extends RoomScene {
       for (const u of UPGRADES.filter(u => u.category === cat.id)) {
         const isEquipped = u.id === equippedId;
         const canAfford = me.cash >= u.price;
+
+        // For livery rows, lay a transparent interactive rect underneath
+        // the text so hovering anywhere on the row previews that livery's
+        // accent on the silhouette above. Other categories don't change
+        // the silhouette so they skip this.
+        if (cat.id === 'livery' && u.accentColor !== undefined) {
+          const hover = this.add.rectangle(left + 500, y + 10, 980, 22, 0x000000, 0)
+            .setOrigin(0.5)
+            .setInteractive();
+          const accent = u.accentColor;
+          hover.on('pointerover', () => rebuildPreview(accent));
+          hover.on('pointerout',  () => rebuildPreview());
+          this.content.add(hover);
+        }
+
         this.addText(left + 16, y, u.name, 13, isEquipped ? '#7be08a' : COLORS.text);
         this.addText(left + 200, y, formatMoney(u.price), 12, canAfford ? COLORS.text : '#ff9aa6');
         if (u.loadFactorBonus) {

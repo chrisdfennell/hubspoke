@@ -17,21 +17,25 @@ export interface Upgrade {
   /** Reputation gained per successful (revenue) arrival. Fractions ok —
    *  they accumulate across many flights. */
   reputationPerFlight?: number;
+  /** Livery-only: secondary color painted on the tail fin so each livery
+   *  reads distinctly on the apron. Falls back to the airline base color
+   *  when unset. */
+  accentColor?: number;
 }
 
 export const UPGRADES: Upgrade[] = [
   // ---- Livery (paint scheme — cosmetic identity + small reputation drip)
   { id: 'classic-stripe',  category: 'livery', name: 'Classic Stripe',  price:  50_000,
-    reputationPerFlight: 0.05,
+    reputationPerFlight: 0.05, accentColor: 0xa0a8b4,
     description: 'Twin-stripe livery. Recognizable on the apron.' },
   { id: 'tropical-sunset', category: 'livery', name: 'Tropical Sunset', price: 120_000,
-    reputationPerFlight: 0.10,
+    reputationPerFlight: 0.10, accentColor: 0xff8855,
     description: 'Vibrant gradient evoking the Hawaiian skyline.' },
   { id: 'gold-trim',       category: 'livery', name: 'Gold Trim',       price: 250_000,
-    reputationPerFlight: 0.18,
+    reputationPerFlight: 0.18, accentColor: 0xffd700,
     description: 'Gilt accents along the fuselage. Catches the eye on every approach.' },
   { id: 'carbon-matte',    category: 'livery', name: 'Carbon Matte',    price: 400_000,
-    reputationPerFlight: 0.25,
+    reputationPerFlight: 0.25, accentColor: 0x2a2a2a,
     description: 'Premium matte finish. Looks expensive because it is.' },
 
   // ---- Interior (seating — primary load-factor driver)
@@ -87,4 +91,13 @@ export interface PlaneUpgrades {
   livery?: string;
   interior?: string;
   entertainment?: string;
+}
+
+/** Tail-fin color from a plane's equipped livery, or undefined if no
+ *  livery (or the livery has no `accentColor`). Used by makePlaneIcon to
+ *  tint the tail. */
+export function liveryAccent(upgrades: PlaneUpgrades): number | undefined {
+  const id = upgrades.livery;
+  if (!id) return undefined;
+  return getUpgrade(id)?.accentColor;
 }
