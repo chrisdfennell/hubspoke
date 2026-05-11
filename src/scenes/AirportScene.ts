@@ -28,19 +28,24 @@ interface RoomDef {
 }
 
 export class AirportScene extends Phaser.Scene {
+  // Room grid: 4 cols × 3 rows of 240×130 tiles with 20px gutters. Total
+  // grid width = 4*240 + 3*20 = 1020. To sit symmetrically inside the
+  // 1280-wide canvas, the leftmost column starts at (1280 - 1020) / 2 = 130
+  // and each subsequent column is +260 from the previous (240 tile + 20
+  // gutter). Without this the whole room grid floated 70px left of center.
   private rooms: RoomDef[] = [
-    { id: 'office',   sceneKey: 'OfficeScene',       name: 'Office',         rect: { x: 60,  y: 100, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Overview, fleet, and routes',     available: true, icon: '🏢' },
-    { id: 'travel',   sceneKey: 'TravelAgencyScene', name: 'Travel Agency',  rect: { x: 320, y: 100, w: 240, h: 130 }, color: 0x355a7d, desc: 'Open and assign routes',          available: true, icon: '✈' },
-    { id: 'shop',     sceneKey: 'WorkshopScene',     name: 'Workshop',       rect: { x: 580, y: 100, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Buy planes, repair, refit',       available: true, icon: '🔧' },
-    { id: 'bank',     sceneKey: 'BankScene',         name: 'Bank',           rect: { x: 840, y: 100, w: 240, h: 130 }, color: 0x355a7d, desc: 'Loans, accounts, savings',         available: true, icon: '🏦' },
-    { id: 'hr',       sceneKey: 'PersonnelScene',    name: 'Personnel',      rect: { x: 60,  y: 260, w: 240, h: 130 }, color: 0x355a7d, desc: 'Hire pilots and mechanics',        available: true, icon: '👥' },
-    { id: 'stocks',   sceneKey: 'StocksScene',       name: 'Stock Market',   rect: { x: 320, y: 260, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Trade airline shares',             available: true, icon: '📊' },
-    { id: 'tower',    sceneKey: 'WorldMapScene',     name: 'Control Tower',  rect: { x: 580, y: 260, w: 240, h: 130 }, color: 0x355a7d, desc: 'Live world map of all flights',    available: true, icon: '🌐' },
-    { id: 'news',     sceneKey: 'NewsScene',         name: 'News Stand',     rect: { x: 840, y: 260, w: 240, h: 130 }, color: 0x355a7d, desc: 'Industry news and rumors',         available: true, icon: '📰' },
-    { id: 'cargo',    sceneKey: 'CargoScene',        name: 'Cargo Hall',     rect: { x: 60,  y: 420, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Freight contracts',                available: true, icon: '📦' },
-    { id: 'security', sceneKey: 'SecurityScene',     name: 'Security',       rect: { x: 320, y: 420, w: 240, h: 130 }, color: 0x355a7d, desc: 'Sabotage missions and defense',    available: true, icon: '🛡' },
-    { id: 'duty',     sceneKey: 'DutyFreeScene',     name: 'Duty Free',      rect: { x: 580, y: 420, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Buy items and boosts',             available: true, icon: '🛒' },
-    { id: 'lounge',   sceneKey: 'LoungeScene',       name: 'VIP Lounge',     rect: { x: 840, y: 420, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Meet contacts, intrigue',          available: true, icon: '🥂' },
+    { id: 'office',   sceneKey: 'OfficeScene',       name: 'Office',         rect: { x: 130, y: 100, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Overview, fleet, and routes',     available: true, icon: '🏢' },
+    { id: 'travel',   sceneKey: 'TravelAgencyScene', name: 'Travel Agency',  rect: { x: 390, y: 100, w: 240, h: 130 }, color: 0x355a7d, desc: 'Open and assign routes',          available: true, icon: '✈' },
+    { id: 'shop',     sceneKey: 'WorkshopScene',     name: 'Workshop',       rect: { x: 650, y: 100, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Buy planes, repair, refit',       available: true, icon: '🔧' },
+    { id: 'bank',     sceneKey: 'BankScene',         name: 'Bank',           rect: { x: 910, y: 100, w: 240, h: 130 }, color: 0x355a7d, desc: 'Loans, accounts, savings',         available: true, icon: '🏦' },
+    { id: 'hr',       sceneKey: 'PersonnelScene',    name: 'Personnel',      rect: { x: 130, y: 260, w: 240, h: 130 }, color: 0x355a7d, desc: 'Hire pilots and mechanics',        available: true, icon: '👥' },
+    { id: 'stocks',   sceneKey: 'StocksScene',       name: 'Stock Market',   rect: { x: 390, y: 260, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Trade airline shares',             available: true, icon: '📊' },
+    { id: 'tower',    sceneKey: 'WorldMapScene',     name: 'Control Tower',  rect: { x: 650, y: 260, w: 240, h: 130 }, color: 0x355a7d, desc: 'Live world map of all flights',    available: true, icon: '🌐' },
+    { id: 'news',     sceneKey: 'NewsScene',         name: 'News Stand',     rect: { x: 910, y: 260, w: 240, h: 130 }, color: 0x355a7d, desc: 'Industry news and rumors',         available: true, icon: '📰' },
+    { id: 'cargo',    sceneKey: 'CargoScene',        name: 'Cargo Hall',     rect: { x: 130, y: 420, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Freight contracts',                available: true, icon: '📦' },
+    { id: 'security', sceneKey: 'SecurityScene',     name: 'Security',       rect: { x: 390, y: 420, w: 240, h: 130 }, color: 0x355a7d, desc: 'Sabotage missions and defense',    available: true, icon: '🛡' },
+    { id: 'duty',     sceneKey: 'DutyFreeScene',     name: 'Duty Free',      rect: { x: 650, y: 420, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Buy items and boosts',             available: true, icon: '🛒' },
+    { id: 'lounge',   sceneKey: 'LoungeScene',       name: 'VIP Lounge',     rect: { x: 910, y: 420, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Meet contacts, intrigue',          available: true, icon: '🥂' },
   ];
 
   // Apron / runway geometry.
