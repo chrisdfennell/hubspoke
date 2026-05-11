@@ -25,6 +25,8 @@ import { formatMoney } from '../systems/Clock';
 import { Difficulty, DIFFICULTIES } from '../state/Difficulty';
 import { CEOS } from '../state/ceos';
 import { sound } from '../systems/Sound';
+import { Modal } from '../ui/Modal';
+import { makePlaneIcon } from '../ui/PlaneIcon';
 
 export class BootScene extends Phaser.Scene {
   constructor() { super('BootScene'); }
@@ -186,8 +188,13 @@ export class BootScene extends Phaser.Scene {
     this.go();
   }
 
-  private startNewGame(id: number, difficulty: Difficulty, ceoId: string) {
-    GameState.reset(difficulty, ceoId);
+  private startNewGame(
+    id: number,
+    difficulty: Difficulty,
+    ceoId: string,
+    customAirline: { name: string; color: number },
+  ) {
+    GameState.reset(difficulty, ceoId, customAirline);
     setActiveSlot(id);
     this.go();
   }
@@ -292,7 +299,7 @@ export class BootScene extends Phaser.Scene {
       card.on('pointerout',  () => card.setFillStyle(0x1a3450));
       card.on('pointerdown', () => {
         overlay.destroy(true);
-        this.startNewGame(slotId, difficulty, ceo.id);
+        this.openAirlinePicker(slotId, difficulty, ceo.id);
       });
       overlay.add(card);
 
@@ -348,6 +355,151 @@ export class BootScene extends Phaser.Scene {
       },
     });
     overlay.add(cancelBtn);
+  }
+
+  /** Last step of new-game flow — pick airline name + tail color. The
+   *  human's airline name + color drive every silhouette, news headline,
+   *  and passenger letter, so giving the player a choice here is a big
+   *  identity boost over the locked-in "Honey Air" gold default. */
+  private openAirlinePicker(slotId: number, difficulty: Difficulty, ceoId: string) {
+    let chosenName = 'Honey Air';
+    let chosenColor = 0xffc857;
+    const palette = [
+      0xffc857, // gold — Honey Air classic
+      0xff7755, // coral
+      0xff88aa, // pink
+      0xa86cc4, // purple
+      0x4488ff, // sky blue
+      0x66ddbb, // mint
+      0x55cc77, // green
+      0xff9933, // orange
+      0xeeeeee, // white
+      0x88aabb, // slate blue
+    ];
+
+    const overlay = this.add.container(0, 0).setDepth(50);
+    overlay.add(this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.7)
+      .setOrigin(0).setInteractive());
+
+    overlay.add(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 640, 520, COLORS.panel)
+      .setStrokeStyle(2, COLORS.panelBorder));
+
+    overlay.add(this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 230, 'Name Your Airline', {
+      fontFamily: 'Segoe UI, Tahoma, sans-serif',
+      fontSize: '22px',
+      color: COLORS.accentText,
+      fontStyle: 'bold',
+    }).setOrigin(0.5));
+    overlay.add(this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 200,
+      `Difficulty: ${DIFFICULTIES[difficulty].label} — final setup before takeoff.`,
+      {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '12px',
+        color: COLORS.textDim,
+      }).setOrigin(0.5));
+
+    // Live preview — silhouette + airline name. Rebuilt each time either
+    // changes so the player sees their choice immediately.
+    let silhouette: Phaser.GameObjects.Graphics | null = null;
+    const nameText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 75, chosenName, {
+      fontFamily: 'Segoe UI, Tahoma, sans-serif',
+      fontSize: '24px',
+      color: COLORS.accentText,
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
+    overlay.add(nameText);
+
+    const updatePreview = () => {
+      if (silhouette) silhouette.destroy();
+      silhouette = makePlaneIcon(
+        this, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 140,
+        150, chosenColor, 0, 'narrowbody', false,
+      );
+      silhouette.setScale(2.5);
+      overlay.add(silhouette);
+      nameText.setText(chosenName);
+    };
+
+    const renameBtn = new Button({
+      scene: this,
+      x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 - 38,
+      width: 140, height: 28,
+      label: 'Rename airline',
+      onClick: () => {
+        Modal.prompt(this, {
+          title: 'Name Your Airline',
+          message: 'Enter the name your airline will fly under:',
+          default: chosenName,
+          minLen: 1,
+          maxLen: 32,
+          onSubmit: (name) => {
+            chosenName = name.trim() || chosenName;
+            updatePreview();
+          },
+        });
+      },
+    });
+    overlay.add(renameBtn);
+
+    overlay.add(this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 5, 'Choose a tail color', {
+      fontFamily: 'Segoe UI, Tahoma, sans-serif',
+      fontSize: '13px',
+      color: COLORS.textDim,
+    }).setOrigin(0.5));
+
+    // Color grid — 2 rows of 5.
+    const cols = 5;
+    const cellW = 64;
+    const cellH = 52;
+    const gridLeft = GAME_WIDTH / 2 - (cols * cellW) / 2;
+    const gridTop = GAME_HEIGHT / 2 + 30;
+    const rings: Phaser.GameObjects.Arc[] = [];
+    palette.forEach((color, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const cx = gridLeft + col * cellW + cellW / 2;
+      const cy = gridTop + row * cellH;
+      const ring = this.add.circle(cx, cy, 20, color, 1)
+        .setStrokeStyle(3, color === chosenColor ? 0xffffff : 0x223046);
+      ring.setInteractive({ useHandCursor: true });
+      ring.on('pointerdown', () => {
+        chosenColor = color;
+        rings.forEach((r, idx) => {
+          r.setStrokeStyle(3, palette[idx] === chosenColor ? 0xffffff : 0x223046);
+        });
+        updatePreview();
+      });
+      overlay.add(ring);
+      rings.push(ring);
+    });
+
+    const backBtn = new Button({
+      scene: this,
+      x: GAME_WIDTH / 2 - 120, y: GAME_HEIGHT / 2 + 215,
+      width: 120, height: 32,
+      label: 'Back',
+      onClick: () => {
+        overlay.destroy(true);
+        this.openCEOPicker(slotId, difficulty);
+      },
+    });
+    const startBtn = new Button({
+      scene: this,
+      x: GAME_WIDTH / 2 + 120, y: GAME_HEIGHT / 2 + 215,
+      width: 160, height: 36,
+      label: 'Start Game',
+      bg: 0x2f6042,
+      bgHover: 0x3f8055,
+      textColor: '#f4ecdc',
+      onClick: () => {
+        overlay.destroy(true);
+        this.startNewGame(slotId, difficulty, ceoId, { name: chosenName, color: chosenColor });
+      },
+    });
+    overlay.add(backBtn);
+    overlay.add(startBtn);
+
+    updatePreview();
   }
 
   private go() {

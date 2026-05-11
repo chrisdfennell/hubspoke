@@ -226,10 +226,14 @@ export class GameState {
   /** Reset to a fresh new game. CEO id is applied to the human player as
    *  part of bootstrap so perks (starting cash bonus, starting inventory,
    *  etc.) land before any system hooks fire. */
-  static reset(difficulty: Difficulty = 'normal', ceoId?: string): GameState {
+  static reset(
+    difficulty: Difficulty = 'normal',
+    ceoId?: string,
+    customAirline?: { name: string; color: number },
+  ): GameState {
     GameState.instance = new GameState();
     GameState.instance.difficulty = difficulty;
-    GameState.instance.bootstrap(ceoId);
+    GameState.instance.bootstrap(ceoId, customAirline);
     return GameState.instance;
   }
 
@@ -330,10 +334,16 @@ export class GameState {
     if (this.news.length > 200) this.news.length = 200;
   }
 
-  private bootstrap(ceoId?: string) {
+  private bootstrap(ceoId?: string, customAirline?: { name: string; color: number }) {
     const cfg = getDifficulty(this.difficulty);
     DEFAULT_AIRLINES.forEach((a, i) => {
-      this.players.push(new Player(a.id, a.name, a.color, i !== 0, cfg.startCash, a.home));
+      const isHuman = i === 0;
+      // Human-only override — keep AI rivals on their catalog defaults so
+      // headlines + the world map still read consistently regardless of
+      // what the player named themselves.
+      const name  = isHuman && customAirline ? customAirline.name  : a.name;
+      const color = isHuman && customAirline ? customAirline.color : a.color;
+      this.players.push(new Player(a.id, name, color, !isHuman, cfg.startCash, a.home));
     });
     this.humanIndex = 0;
     this.activeHub = this.human.hubs[0];

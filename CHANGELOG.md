@@ -9,6 +9,44 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Custom airline name + tail color at new-game time
+
+New step in the new-game flow lets the player name their airline and
+pick a tail color before takeoff. No more being locked into the
+default "Honey Air" gold from `DEFAULT_AIRLINES[0]` — every silhouette,
+every news headline, and every passenger letter now reflect the
+player's choice.
+
+**Flow** ([BootScene.ts](src/scenes/BootScene.ts))
+- Difficulty pick → CEO pick → **Airline pick** (new) → game starts.
+- The new picker shows a live preview at the top: a class-narrowbody
+  silhouette scaled 2.5× in the chosen color, with the chosen name
+  centered below. Both update instantly when the player changes
+  either side.
+- **Rename airline** button pops a `Modal.prompt` with the current
+  name pre-filled (default `Honey Air`, 1–32 chars).
+- **Color grid** of 10 distinct colors as 40-px circles in a 5×2
+  layout: gold (classic), coral, pink, purple, sky blue, mint,
+  green, orange, white, slate. Clicked color gets a white stroke
+  so the active selection is unambiguous.
+- **Back** returns to the CEO picker (so a player who picked the
+  wrong CEO can step back). **Start Game** commits with a green
+  button.
+
+**Plumbing** ([GameState.ts](src/state/GameState.ts))
+- `GameState.reset(difficulty, ceoId, customAirline?)` and
+  `bootstrap(ceoId, customAirline?)` take an optional `{ name,
+  color }` and apply it only to player 0 (the human) when
+  building the players array. AI rivals keep their catalog-
+  defined names and colors so the world-map / standings reads
+  consistently regardless of what the player picked.
+
+Save compat: existing saves load via `loadFrom` which restores the
+player's stored name + color, untouched. The new picker only affects
+fresh games.
+
+---
+
 ## 2026-05-11 — Workshop silhouettes + big-purchase confirm + tutorial banner
 
 Three polish wins bundled together.
