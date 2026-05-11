@@ -9,6 +9,347 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — GitHub Pages deployment
+
+Set up automated deploys to GitHub Pages so the game can actually be
+played in a browser at `https://chrisdfennell.github.io/hubspoke/`.
+
+**Vite config** ([vite.config.ts](vite.config.ts))
+- Added `base: '/hubspoke/'` when `NODE_ENV=production`, falling back to
+  `'/'` for local `npm run dev`. The repo name on GitHub is `hubspoke`,
+  so Pages serves the site under that subpath — Vite needs the base set
+  at build time so script tags resolve correctly. Verified: built
+  `index.html` references `/hubspoke/assets/index-*.js`.
+
+**GitHub Actions workflow** ([.github/workflows/deploy.yml](.github/workflows/deploy.yml))
+- On every push to `main` (and manual dispatch): checkout → Node 20
+  with npm cache → `npm ci` → `npm run build` with `NODE_ENV=production`
+  → `touch dist/.nojekyll` so Pages doesn't try to Jekyll-process the
+  asset folder → upload `dist/` as a Pages artifact → deploy.
+- Uses the modern `actions/deploy-pages@v4` flow (not the legacy
+  branch-push approach), so `dist/` never lives in git history.
+- Standard `pages: write` + `id-token: write` permissions + concurrency
+  guard so two rapid pushes can't race.
+
+**One-time manual step** (cannot be automated from here): go to the
+repo's GitHub Settings → Pages → set **Source: GitHub Actions**.
+After that, every push to main rebuilds and redeploys.
+
+---
+
+## 2026-05-10 — Sabotage actually hurts now
+
+The Security room and its 9 items existed but the consequences of a
+landed sabotage were lukewarm — a few rep points off and one plane's
+condition halved. Worth ignoring. The full pass:
+
+**Sabotage effects rewritten** ([Sabotage.ts](src/systems/Sabotage.ts)):
+- **Banana Peel** ($5k) — rep −5 on the target. Light tier.
+- **Super Glue** ($18k) — grounds one idle plane for 6 game-hours
+  with condition cut to 60%, rep −5. If no idle planes, a flying
+  plane takes a 40% condition hit (raising mid-flight crash odds).
+- **Virus USB** ($35k) — TARGET'S home hub (not always HNL — a
+  London rival is hit at LHR) takes a −50% demand modifier for 4
+  days. Rep −7.
+- **Incendiary** ($90k) — hangar fire. Up to 3 idle planes grounded
+  for 12 game-hours with condition reduced to 30%, rep −20. Named
+  news headline when the saboteur is caught.
+
+**Maintenance status is alive** ([Flights.ts](src/systems/Flights.ts)):
+- `PlaneStatus.maintenance` was defined but never actually used.
+  Saboteur now sets it; new `releaseMaintenancePlanes` hook (added to
+  the per-tick callback) transitions planes back to `idle` once their
+  `doneAt` is reached. Posts a "returned to service" news entry for
+  the human.
+
+**AI sabotages you back with real teeth** ([Sabotage.ts](src/systems/Sabotage.ts)):
+- AI's daily sabotage no longer uses a free banana peel. AI now
+  *buys* a sabotage item from the same Duty Free catalog the human
+  uses (pays cash, picks heavier items when flush), and runs it
+  through the same `attemptSabotage` resolver — so blocked attempts
+  generate the same "caught red-handed" headlines for AI saboteurs
+  that they do for the human.
+- Target selection biased toward the cash leader. A run leader gets
+  more sabotage attempts thrown at them than a struggling rival.
+
+**Apron visibility** ([AirportScene.ts](src/scenes/AirportScene.ts)):
+- "IN TRANSIT" strip now also lists grounded planes (`🔧 PlaneName`,
+  pink) so the player can see at a glance why an expected dispatch
+  isn't happening. Same row, color-coded by status.
+
+Net effect: the run leader (often the player late-game) now actually
+fears the next Newsstand headline. The Security room finally pulls
+its weight as both a defensive (CCTV / K-9 / Cyber Shield) and an
+offensive surface.
+
+---
+
+## 2026-05-10 — Ticket-price buttons: bigger, labeled, four steps
+
+The `−` / `+` adjusters in the Travel Agency route detail were 28-px
+hard-to-find buttons shoved to the right edge of the row. Player didn't
+realize they could change route prices at all. Replaced with a four-button
+cluster (`−$50`, `−$10`, `+$10`, `+$50`) placed directly next to the
+ticket value, with explicit dollar labels so the affordance is obvious.
+Ticket value bumped to 14-px accent color for the same reason.
+([TravelAgencyScene.ts](src/scenes/rooms/TravelAgencyScene.ts))
+
+---
+
+## 2026-05-10 — Smarter AI rivals (and the same rules apply)
+
+AI overhaul aimed at two complaints: rivals felt asleep at the wheel,
+and they were quietly skipping some of the constraints the human had
+to deal with. ([AI.ts](src/systems/AI.ts),
+[GameState.ts](src/state/GameState.ts))
+
+**Parity — AI plays by the same rules**:
+- Each AI rival now rolls a random CEO at bootstrap and applies the
+  same starting-cash + starting-inventory perks (and reads the same
+  live perks for loan APR, repair discount, condition decay, duty-free
+  multiplier) the human gets. No more "human gets Anita's $1M bonus
+  while AI gets nothing."
+- AI now repairs its fleet on the same Workshop cost formula the
+  human's auto-repair setting uses, gated by the AI's CEO repair
+  discount and threshold-checked at 40% condition (a hair more
+  conservative than the human's 50% default — saves AI cash).
+- Already-shared: crew hire costs, daily payroll, fuel, condition
+  decay, mid-flight crash/incident odds, dispatch stagger, turnaround
+  cooldown, loan interest, crew-capacity flight cap. AI was already
+  paying these; CEO perks now give them the same dials humans get.
+
+**Smarter — AI plays well**:
+- **Undercut pricing**: when opening a new route, AI scans every
+  existing rival route on the same city pair and prices its starting
+  ticket one $5 step below the cheapest, with a 60%-of-fair floor so
+  prices can't crater.
+- **Defensive repricing**: each day, the AI walks its own routes and
+  if any rival is cheaper on the same pair, drops its own ticket one
+  $5 step toward theirs (same 60%-of-fair floor). Single step per day
+  so a price war can't spiral overnight.
+- **Smarter expansion targets**: new-route picker now scores each
+  reachable city by `demand × 10 − rival_count × 3 + jitter`, biasing
+  the AI toward high-demand low-competition pairs the way a human
+  would. Previously it picked uniformly at random.
+
+Net effect: opening a route to a city the AI already serves now actually
+costs you — they undercut you on price and the route's economics shift.
+Existing AI routes also defend themselves against your encroachment over
+the next few in-game days.
+
+---
+
+## 2026-05-10 — Career stats: live panel + game-over screen
+
+Two surfaces for the same data so the player can check progress mid-run
+and also see a proper summary when the run ends.
+
+**State** ([GameState.ts](src/state/GameState.ts))
+- `GameStats` interface with 14 cumulative fields: flights, passengers,
+  km, revenue, fuel, bestFlightProfit, worstFlightLoss, crashes,
+  incidents, routesOpened, planesBought, hubsBought, daysPlayed,
+  peakNetWorth.
+- `state.stats` on GameState, persisted in `GameSnapshot.stats`
+  (optional for backwards-compat with pre-stats saves; defaults applied
+  on load via `{ ...DEFAULT_STATS, ...(snap.stats ?? {}) }`).
+
+**Tracking**:
+- Flights / passengers / km / revenue / fuel / best+worst flight all
+  updated in `Flights.landArrivedPlanes` after each revenue arrival
+  (human only).
+- Crashes / incidents counted in `Flights.maybeMishap`.
+- routesOpened bumped on TravelAgencyScene "Open route" click.
+- planesBought bumped on WorkshopScene buy.
+- hubsBought bumped on WorldMapScene buy.
+- New `Stats.ts` system hooks `clock.onDay` for daysPlayed +
+  peakNetWorth high-water mark; `registerStatsHooks()` wired into
+  BootScene.
+
+**UI**:
+- `renderStatsBlock` ([StatsBlock.ts](src/ui/StatsBlock.ts)) — shared
+  two-column grid renderer. Optional `container` param routes texts
+  into a scrollable RoomScene container when needed.
+- `StatsScene` ([StatsScene.ts](src/scenes/rooms/StatsScene.ts)) — a
+  RoomScene reachable from a new 📊 button in the HUD (between the
+  speed text and the ? help button). Shows current cash / net worth /
+  reputation on top, then the stats block.
+- `GameOverScene` rewritten to slot the same stats block between the
+  message and the Back-to-Title button, giving every run a proper
+  closing summary.
+
+---
+
+## 2026-05-10 — Boost cooldown: one use per game-day
+
+Player could climb from 39 to 100 reputation by spamming Marketing
+Campaigns + Press Conferences in a single Duty Free visit — ~$1M
+total. Now each instant-use boost item (`marketing`, `press-spin`,
+`pilot-prog`) is gated to a single purchase per game-day per item.
+
+Implementation ([DutyFreeScene.ts](src/scenes/rooms/DutyFreeScene.ts),
+[Player.ts](src/state/Player.ts)):
+- `Player.boostUsedOn: Record<itemId, dayCount>` — persisted with the
+  save, defaults to `{}` for old saves.
+- DutyFreeScene checks `me.boostUsedOn[item.id] === today` when
+  rendering each boost row; if so the button reads "Used today" and is
+  disabled, with a red "Used today — available again tomorrow." hint
+  underneath.
+- After a successful purchase, `boostUsedOn[item.id] = today` is
+  recorded. Defense + sabotage items are unaffected (they go into
+  inventory rather than firing immediately).
+
+Net effect: marketing now caps at ~5 rep/day, which is sustainable but
+no longer skip-the-game level. Pairs with the slow per-flight rep drip
+from livery upgrades for a "passive + active" mix.
+
+---
+
+## 2026-05-10 — Plane livery + interior upgrades
+
+Per-plane customization, the biggest "this is Airline Tycoon" beat we
+were still missing ([upgrades.ts](src/state/upgrades.ts),
+[WorkshopScene.ts](src/scenes/rooms/WorkshopScene.ts)).
+
+**Three categories, one slot each**:
+- **Livery** (cosmetic + reputation drip per arrival) — Classic Stripe
+  ($50k, +0.05 rep), Tropical Sunset ($120k, +0.10), Gold Trim ($250k,
+  +0.18), Carbon Matte ($400k, +0.25).
+- **Interior** (load-factor multiplier) — Premium Seats ($180k, +5%),
+  Business Cabin ($550k, +10%), Lie-Flat Suites ($1.2M, +16%).
+- **Entertainment** (load-factor bump) — Onboard Wi-Fi ($90k, +3%),
+  Seat-back AVOD ($240k, +6%), Streaming Suite ($480k, +9%).
+
+A maxed-out wide-body picks up roughly +25% load factor and +0.5 rep
+per arrival.
+
+**Plumbing**:
+- `Plane.upgrades: { livery?; interior?; entertainment? }` — at most one
+  per category. Serialized in `PlaneSnapshot.upgrades` (optional for
+  backwards-compat with pre-upgrade saves; `fromJSON` defaults to `{}`).
+- `flightProfit` multiplies expected LF by `planeLoadFactorBonus()`,
+  capped at 1.0 so we never exceed seat count.
+- `landArrivedPlanes` adds `planeReputationPerFlight()` to the player's
+  rep (clamped to 100) on every successful revenue arrival.
+
+**UI** — Workshop fleet row gained an "Outfit" button beside Repair /
+Rename. Clicking opens a focused per-plane detail view: three category
+panels with the equipped upgrade highlighted, Install / Remove buttons,
+and price + effect columns. Back button returns to the buy + fleet
+overview. View state resets on every scene entry so leaving + re-entering
+the Workshop always lands you on the default screen.
+
+---
+
+## 2026-05-10 — Procedural background music
+
+Same procedural-everything ethos as the rest of the audio system — no
+external assets ([Sound.ts](src/systems/Sound.ts)). Three loops built
+out of overlapping sine pad voices (a slow chord progression) plus a
+sparse triangle-wave melody picked from a pentatonic scale at random
+intervals, all gated by short attack/release envelopes:
+
+- **`airport-lobby`** — Am → F → C → G, ~4s per chord. Slightly
+  melancholic, runs during the AirportScene + rooms.
+- **`world-map`** — Dm → Bb → F → A, ~6s per chord. More open and
+  airy; takes over while the Control Tower map is up.
+- **`title`** — Cmaj → Am → F → G, ~3s per chord. Faster and brighter,
+  reserved for the BootScene title (not yet wired — would slot in if we
+  later switch the boot screen to gameplay-state).
+
+**Plumbing**:
+- `sound.startMusic(track)` / `sound.stopMusic()`.
+- `sound.setMusicVolume(v)` (0..1) — persisted in localStorage so it
+  survives reloads independently of the SFX mute toggle.
+- Mute (the speaker button in the HUD) now halts music scheduling on
+  the way down (saves CPU on a silent loop) and re-starts whatever
+  track was last requested on the way up — scenes don't need to listen
+  to the mute event.
+- BootScene.go() kicks the airport-lobby track inside the user-gesture
+  click handler so the AudioContext is allowed to resume from suspended.
+- WorldMapScene swaps to `world-map` on open, back to `airport-lobby`
+  on close.
+- GameOverScene calls `stopMusic()` to end the loop and clear the
+  desired track (no auto-restart on un-mute from the game-over screen).
+- New "Background music" preset row in Settings (Off / Low / Medium /
+  High) using the same `addPresetRow` helper as the other dial-style
+  options.
+
+---
+
+## 2026-05-10 — Animations scale with game speed (kills the 4× "poof")
+
+Even with the same-plane chain fix, a plane on a short route (HNL ↔ Maui
+= 1.3s flight at 4×) would still "poof" after deplaning. Root cause: the
+2.8s landing animation runs in real time while the in-game cycle runs
+~4× faster — by the time the landing's `onComplete` fired, the plane had
+already landed at OGG, dispatched back, and was mid-return. The chained
+`startTakeoff` then bailed validation (`plane.status.from !== 'hnl'`) and
+the gate was empty.
+
+Real fix: animation durations are now scaled by `GameState.speed` via a
+new `this.a(ms)` helper ([AirportScene.ts](src/scenes/AirportScene.ts)).
+At 1× the landing is 2800ms; at 2× it's 1400ms; at 4× it's 700ms. The
+in-game turnaround is 15 game-min = 3000/speed ms — so the landing
+animation is always strictly shorter (14 game-min < 15 game-min) and
+the plane never finishes its return trip before its arrival animation
+ends.
+
+Touched: every duration in `animateTakeoff`, `animateLanding`,
+`flashLabel`, and the `activeLandingEndsAt` end-time computation. Tween
+durations during a single anim are still constant — changing speed
+mid-flight doesn't retroactively stretch an in-progress tween — but each
+new animation picks up the current speed.
+
+---
+
+## 2026-05-10 — Takeoff: chain off landing onComplete to kill the frame gap
+
+Even after deferring the takeoff icon (rather than just the BOARDING bar)
+until after a hold, the user still saw the plane vanish for ~1 frame at
+2× / 4× speeds — specifically at G1, and intermittently ("sometimes it
+works, sometimes it doesn't"). That intermittency was the giveaway: a
+frame-ordering race between Phaser's time-event firing (`delayedCall`)
+and the landing tween's `onComplete`. Both were scheduled for the same
+scene-time, but they don't always land in the same frame slot — depending
+on the frame delta, one could fire one frame before the other, leaving the
+gate empty.
+
+Fix ([AirportScene.ts](src/scenes/AirportScene.ts)):
+- New `onLandingComplete: Map<planeId, () => void>` field — a chained
+  continuation registered when `animateTakeoff` is called *while THIS
+  plane's own landing animation is still running*.
+- The landing's final `onComplete` callback now: destroys the landing
+  icon, clears bookkeeping, **then** synchronously invokes the chained
+  takeoff start. New icon is created in the same callback that destroyed
+  the old one — no race, no frame gap.
+- Sibling-plane hold path still uses `delayedCall` (different plane's
+  landing onComplete doesn't have our continuation, and the visual race
+  there isn't a same-gate merge).
+- Synchronous path when nothing is active — avoids the
+  `delayedCall(0)` 1-frame delay at 1× speed where landing always
+  finishes before turnaround expires.
+
+---
+
+## 2026-05-10 — Takeoff hold: defer the *icon*, not just the boarding bar
+
+First-pass fix held only the BOARDING phase but created the takeoff icon
+immediately, which at 2× / 4× speeds (turnaround cooldown shorter than the
+2.8s landing animation) produced *two icons for one plane* — a phantom
+parked icon waiting at the gate while the landing icon for the same plane
+was still taxiing in. They visibly merged when the landing reached the
+gate.
+
+Fix: in `animateTakeoff` ([AirportScene.ts](src/scenes/AirportScene.ts)),
+move icon creation INSIDE the `delayedCall` so nothing is drawn during the
+hold. The gate is still reserved on entry (animatingIds.add) so
+gateByPlaneId cleanup doesn't release the slot. After the hold we
+re-validate that the plane is still flying out of the active hub — at
+4× speed it may have already completed another cycle and be somewhere
+else — and silently skip the anim if state moved on.
+
+---
+
 ## 2026-05-10 — Takeoff animation holds for active landings
 
 With 3+ planes on 3+ routes, plane A's turnaround could expire while
