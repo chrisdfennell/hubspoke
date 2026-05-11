@@ -9,6 +9,67 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Bugfix: weekly newspaper fires one day late
+
+User reported reaching day 8 with no paper popping up. Tracing:
+`clock.onDay` fires *on the day transition* (when `d.day` increments
+inside `Clock.advanceOneMinute`). The original implementation took
+the baseline snapshot lazily on the first `onDay` fire, which meant
+that first transition (01-01 → 01-02) didn't count toward the 7-day
+window — it just-and-only seeded the baseline. Net effect: paper
+landed on the 01-08 → 01-09 transition instead of 01-07 → 01-08,
+costing the player an extra day.
+
+Fix ([Newspaper.ts](src/systems/Newspaper.ts)): take the baseline
+snapshot eagerly in `resetNewspaper()`, called from
+`BootScene.go()` once GameState is bootstrapped. Every subsequent
+`onDay` fire now increments the counter, so the 7th transition
+fires the paper.
+
+Existing saves loaded after this fix will take their baseline at
+the current date on reload; their next paper drops 7 in-game days
+later from that point.
+
+---
+
+## 2026-05-11 — Day / night cycle on the apron
+
+The airport now reads the in-game clock visually — sky tint shifts
+through dawn / day / dusk / night, and runway edge lights glow at
+night and fade through the day. Pure atmosphere; doesn't affect
+gameplay state.
+
+**Implementation** ([AirportScene.ts](src/scenes/AirportScene.ts))
+
+- New `skyOverlay` rectangle covering the apron + runway region
+  (y=555 down). Its color + alpha are recomputed each frame from
+  the current game hour via the new `daylightAt(t)` helper.
+- New `runwayLightsLayer` — 14 paired top + bottom edge lights
+  along the runway, each a soft outer halo + bright inner dot
+  (yellow `0xffd44a` / `0xffe07a`). Static positions built once;
+  visibility shifts via `setAlpha()`.
+- `updateDaylight()` called from `update()` so the tint keeps up
+  with the game clock at every speed without needing its own
+  per-minute hook.
+
+**Color/alpha keyframes** — file-scope `DAYLIGHT_KEYFRAMES`. Each
+entry: `[hour, color, alpha, lightsAlpha]`. The `daylightAt(t)`
+function finds the bracketing pair and linearly interpolates color
++ both alphas, so transitions are gradual rather than stepping at
+hour boundaries. Phases:
+
+- 00:00–05:00 deep night (`0x0a1a2c` @ 0.34), lights at full
+- 06:00–07:00 dawn (`0xff7a3a` warm amber @ 0.22 fading)
+- 09:00 onward to 16:00 midday — alpha drops to 0, no tint
+- 18:00–19:00 dusk amber/red, lights coming up
+- 20:00 evening blue with lights bright, transitioning back to night
+
+Tunables (keyframe array near the bottom of `AirportScene.ts`) are
+straightforward to tweak — change a hex value or push a new
+keyframe and the lerp picks it up.
+
+---
+
 ## 2026-05-11 — News Stand tabs: Voices / Headlines / World Events
 
 The News Stand was only showing `state.gameEvents` (the structured

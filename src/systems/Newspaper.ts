@@ -85,11 +85,15 @@ function dateMin(d: GameDate): number {
  * null. Side effects: increments the day counter, snapshots stats on fire.
  * Call from a `clock.onDay` hook so it fires exactly once per game-day.
  *
- * First call after a new-game / reload takes a baseline snapshot and returns
- * null — the first paper drops at the end of the first full week.
+ * The baseline snapshot is taken at game-start by `resetNewspaper()` rather
+ * than lazily here — that's what makes the very first day-transition count
+ * toward the 7-day total, so the first paper lands exactly 7 day-transitions
+ * (a full game-week) after the run begins instead of 8.
  */
 export function tickNewspaper(): WeeklyPaper | null {
   if (!lastSnap) {
+    // Defensive — resetNewspaper() should have seeded this. If it didn't
+    // (a code path I missed), bootstrap lazily here and skip this fire.
     lastSnap = takeSnap();
     return null;
   }
@@ -139,10 +143,13 @@ export function tickNewspaper(): WeeklyPaper | null {
 
 /** Reset between runs. Called from BootScene.go() so starting a fresh game
  *  (or reverting to title and starting again) doesn't inherit a baseline
- *  snapshot from the previous run. */
+ *  snapshot from the previous run. Takes the baseline snapshot immediately
+ *  so the very first day-transition counts toward the week — without this
+ *  the first onDay fire would just-and-only seed the baseline, costing the
+ *  player one extra day of waiting before the first paper. */
 export function resetNewspaper(): void {
   daysSincePaper = 0;
-  lastSnap = null;
+  lastSnap = takeSnap();
   pending = null;
 }
 

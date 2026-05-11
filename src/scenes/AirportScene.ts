@@ -84,6 +84,13 @@ export class AirportScene extends Phaser.Scene {
   private readonly VISITOR_X_LEFT = 200;
   private readonly VISITOR_X_RIGHT = 1000;
   private readonly MAX_VISITORS = 4;
+
+  /** Tinted overlay covering apron + runway. Its color and alpha shift with
+   *  the in-game hour so the airport reads dawn / day / dusk / night. */
+  private skyOverlay!: Phaser.GameObjects.Rectangle;
+  /** Container of small glowing dots along the runway edges. Alpha shifts
+   *  with the daylight phase — invisible during midday, full at night. */
+  private runwayLightsLayer!: Phaser.GameObjects.Container;
   private tooltip!: Tooltip;
   /** Title strip — updated when activeHub changes so the airport reflects
    *  whichever hub the player is currently focused on. */
@@ -156,6 +163,15 @@ export class AirportScene extends Phaser.Scene {
     this.transitLayer = this.add.container(0, 0);
     this.visitorLayer = this.add.container(0, 0);
 
+    // Sky tint + runway lights live above the apron tarmac but below the
+    // plane sprites + animations, so a night blue washes the runway base
+    // without dimming the planes themselves into illegibility.
+    this.skyOverlay = this.add
+      .rectangle(0, 555, GAME_WIDTH, GAME_HEIGHT - 555, 0x000000, 0)
+      .setOrigin(0);
+    this.runwayLightsLayer = this.add.container(0, 0);
+    this.buildRunwayLights();
+
     // Initial gate-box layout. Subsequent hub-switches and gate purchases
     // are picked up by ensureGateLayout() in update().
     this.ensureGateLayout();
@@ -194,6 +210,7 @@ export class AirportScene extends Phaser.Scene {
     this.drawVisitingPlanes();
     this.drawInTransit();
     this.refreshTitleIfHubChanged();
+    this.updateDaylight();
   }
 
   /** Recompute gateXs + redraw gate boxes if the active hub changed or its
@@ -569,6 +586,39 @@ export class AirportScene extends Phaser.Scene {
       }).setOrigin(0.5);
       this.parkedLayer.add(idLabel);
     }
+  }
+
+  // ----- Day / night cycle -----
+
+  /** Build the static runway edge-light dots once. Their visibility is
+   *  controlled by `runwayLightsLayer.alpha` in updateDaylight(). */
+  private buildRunwayLights() {
+    const count = 14;
+    const left = this.RUNWAY_LEFT + 50;
+    const right = this.RUNWAY_RIGHT - 50;
+    const step = (right - left) / (count - 1);
+    for (let i = 0; i < count; i++) {
+      const x = left + i * step;
+      // Top + bottom edge of the runway. Soft yellow with a fainter halo
+      // outer dot to suggest a glow without needing a shader.
+      const halo1 = this.add.circle(x, this.runwayY - 17, 4, 0xffd44a, 0.20);
+      const dot1  = this.add.circle(x, this.runwayY - 17, 1.8, 0xffe07a, 1);
+      const halo2 = this.add.circle(x, this.runwayY + 17, 4, 0xffd44a, 0.20);
+      const dot2  = this.add.circle(x, this.runwayY + 17, 1.8, 0xffe07a, 1);
+      this.runwayLightsLayer.add([halo1, dot1, halo2, dot2]);
+    }
+    this.runwayLightsLayer.setAlpha(0);
+  }
+
+  /** Update sky-tint + runway-light opacity based on the in-game hour.
+   *  Smoothly interpolates between keyframes so the transition between
+   *  phases is gradual as the game clock advances. */
+  private updateDaylight() {
+    const d = GameState.get().date;
+    const t = d.hour + d.minute / 60;
+    const phase = daylightAt(t);
+    this.skyOverlay.setFillStyle(phase.color, phase.alpha);
+    this.runwayLightsLayer.setAlpha(phase.lightsAlpha);
   }
 
   // ----- Visiting rival planes -----
@@ -1132,4 +1182,59 @@ export class AirportScene extends Phaser.Scene {
     g.rotation = rotationRad;
     return g;
   }
+}
+
+/**
+ * Sky-tint keyframes by game-clock hour. Each entry: [hour, color, alpha,
+ * runway-lights alpha]. `daylightAt(t)` finds the bracketing pair and
+ * linearly interpolates color + alphas, so transitions between phases are
+ * smooth as the in-game clock advances minute-by-minute.
+ *
+ * - 00:00 deep night (cool blue tint), runway lights at full
+ * - 05:00 still dark, lights still on
+ * - 06:30 dawn — warm amber tint at strongest
+ * - 09:00 morning sun fades the tint to near-zero
+ * - 12:00–16:00 midday, no overlay
+ * - 18:00 dusk amber tint
+ * - 20:00 evening blue, lights coming up
+ * - 22:00–24:00 back to deep night
+ */
+type DaylightFrame = [hour: number, color: number, alpha: number, lightsAlpha: number];
+const DAYLIGHT_KEYFRAMES: DaylightFrame[] = [
+  [0,  0x0a1a2c, 0.34, 1.00],
+  [5,  0x0a1a2c, 0.30, 0.95],
+  [6,  0xff7a3a, 0.22, 0.75],
+  [7,  0xff8c4a, 0.16, 0.45],
+  [9,  0xffd47a, 0.05, 0.00],
+  [12, 0x000000, 0.00, 0.00],
+  [16, 0x000000, 0.00, 0.00],
+  [18, 0xff7a3a, 0.18, 0.30],
+  [19, 0xc25030, 0.22, 0.60],
+  [20, 0x1a2840, 0.28, 0.85],
+  [22, 0x0a1a2c, 0.34, 1.00],
+  [24, 0x0a1a2c, 0.34, 1.00],
+];
+
+function daylightAt(t: number): { color: number; alpha: number; lightsAlpha: number } {
+  let i = 0;
+  while (i < DAYLIGHT_KEYFRAMES.length - 1 && DAYLIGHT_KEYFRAMES[i + 1][0] <= t) i++;
+  const a = DAYLIGHT_KEYFRAMES[i];
+  const b = DAYLIGHT_KEYFRAMES[Math.min(i + 1, DAYLIGHT_KEYFRAMES.length - 1)];
+  const dur = b[0] - a[0];
+  const fr = dur > 0 ? (t - a[0]) / dur : 0;
+  return {
+    color: lerpColor(a[1], b[1], fr),
+    alpha: a[2] + (b[2] - a[2]) * fr,
+    lightsAlpha: a[3] + (b[3] - a[3]) * fr,
+  };
+}
+
+function lerpColor(c1: number, c2: number, t: number): number {
+  const r1 = (c1 >> 16) & 0xff, g1 = (c1 >> 8) & 0xff, b1 = c1 & 0xff;
+  const r2 = (c2 >> 16) & 0xff, g2 = (c2 >> 8) & 0xff, b2 = c2 & 0xff;
+  return (
+    (Math.round(r1 + (r2 - r1) * t) << 16) |
+    (Math.round(g1 + (g2 - g1) * t) << 8)  |
+     Math.round(b1 + (b2 - b1) * t)
+  );
 }
