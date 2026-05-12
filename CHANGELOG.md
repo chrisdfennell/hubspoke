@@ -9,6 +9,69 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-11 — Intervention pool expansion v2: +21 templates (pool now 37)
+
+Doubled (and then some) the intervention pool from 16 to **37**.
+New events are grouped into broad themes so the variety reads
+clearly even across many in-game weeks.
+
+**Safety / ops** (3)
+- **Cabin Fire Drill Training** — $8k preventative or skip (−2 rep).
+- **Bird Strike Damage** — $15k emergency repair or defer (−10%
+  condition on a random plane).
+- **Weather Delay Compensation** — $20k vouchers or stand pat
+  (−4 rep).
+
+**HR / crew** (4)
+- **Mechanics' Grievance** — $12k bonus or refuse (−3 rep).
+- **Pilot Fatigue Lawsuit** — settle $30k or litigate (60% $0 /
+  40% $80k).
+- **Flight Attendant Strike Threat** — $18k bonus or 50% chance
+  walkout (−5 rep).
+- **Crew Uniform Redesign** — $15k for +4 rep, or pass.
+
+**Marketing / brand** (4)
+- **Sports Team Sponsorship** — $35k for +6 rep, or pass.
+- **Trade Show Booth** — $12k for +3 rep, or skip.
+- **Influencer Partnership** — $10k gamble (60% +4 rep / 40% −2 rep).
+- **Loyalty Program Launch** — $50k for +8 rep, or hold off.
+
+**Finance** (1)
+- **Tax Audit** — $15k accountant or 50% chance of $25k fine.
+
+**Industry** (2)
+- **Aviation Magazine Cover** — $5k for +5 rep.
+- **Airline Alliance Invitation** — $30k for +7 rep (requires
+  multi-hub airline).
+
+**Maintenance** (1)
+- **Preventative Wing Inspection** — $15k or skip (random plane
+  −10% condition).
+
+**Public relations** (4)
+- **Customer Complaint Storm** — $5k campaign or ride it out
+  (−3 rep).
+- **Lost Luggage Policy** — $10k for +3 rep.
+- **Holiday Surge Pricing Scandal** — $20k refunds or stand pat
+  (−3 rep).
+- **Streaming Documentary** — free access (+3 rep) or refuse
+  (−1 rep).
+
+**Flavor** (2)
+- **Earthquake Terminal Damage** — $30k repair or delay (−5 rep).
+- **Internal Ethics Program** — $20k for +5 rep.
+
+**Eligibility tiers** ensure early-game players don't get hit with
+mid/late-game events:
+- Always-available — VIP Lounge Renovation, TV Interview, Trade
+  Show, etc.
+- Tier 1 (>3 flights) — stowaway / influencer
+- Tier 2 (>10 flights) — magazine, lost luggage, surge pricing
+- Tier 3 (>20 flights) — industry conference, tax audit, ethics
+- Tier 4 (>30 flights) — documentary
+
+---
+
 ## 2026-05-11 — Intervention pool expansion: +10 event templates
 
 Bumped the intervention pool from 6 to **16 templates** so the same

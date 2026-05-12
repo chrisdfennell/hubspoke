@@ -575,6 +575,681 @@ const TEMPLATES: InterventionTemplate[] = [
       ],
     }),
   },
+
+  // ===== SAFETY / OPS =====
+
+  // ----- Cabin fire drill training: cheap preventative or risk PR hit. -----
+  {
+    id: 'cabin-fire-drill',
+    requires: (s) => s.human.planes.length > 0,
+    build: () => ({
+      id: 'cabin-fire-drill',
+      title: 'Cabin Fire Drill Training',
+      description:
+        'Operations recommends a paid certification refresh on cabin emergency drills. Costs $8,000 ' +
+        'to run; passing on it means your crew is rolling slightly worn certifications, with mild ' +
+        'reputation downside if anything goes wrong publicly.',
+      options: [
+        {
+          label: 'Fund the training ($8,000)',
+          disabledReason: (st) => st.human.cash >= 8_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 8_000;
+            st.pushNews(`${st.human.name} certified cabin crew on the latest emergency drills.`);
+          },
+        },
+        {
+          label: 'Skip the refresh (small −2 reputation)',
+          apply: (st) => {
+            st.human.reputation = Math.max(0, st.human.reputation - 2);
+            st.pushNews(`${st.human.name} skipped a cabin drill refresh. Industry observers noted the lapse.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Bird strike damage: pay or risk plane condition. -----
+  {
+    id: 'bird-strike',
+    requires: (s) => s.human.planes.length > 0,
+    build: (s) => {
+      const plane = pick(s.human.planes);
+      return {
+        id: 'bird-strike',
+        title: 'Bird Strike Damage Report',
+        description:
+          `A flock strike on ${plane.name} during approach left visible nacelle damage. Pay for ` +
+          `emergency repair now, or defer the work and accept the wear.`,
+        options: [
+          {
+            label: 'Emergency repair ($15,000)',
+            disabledReason: (st) => st.human.cash >= 15_000 ? null : 'Not enough cash.',
+            apply: (st) => {
+              st.human.cash -= 15_000;
+              st.pushNews(`Workshop repaired bird-strike damage on ${plane.name}.`);
+            },
+          },
+          {
+            label: 'Defer the work (plane condition −10%)',
+            apply: (st) => {
+              plane.condition = Math.max(0.10, plane.condition - 0.10);
+              st.pushNews(`${st.human.name} deferred bird-strike repair on ${plane.name}. Condition down 10%.`);
+            },
+          },
+        ],
+        footer: (st) => `${plane.name} condition: ${Math.round(plane.condition * 100)}%   ·   Cash: ${formatMoney(st.human.cash)}`,
+      };
+    },
+  },
+
+  // ----- Weather delay compensation: pay or take rep hit. -----
+  {
+    id: 'weather-delay',
+    requires: (s) => s.stats.flights > 5,
+    build: () => ({
+      id: 'weather-delay',
+      title: 'Weather Delay Compensation',
+      description:
+        'A storm system stranded passengers across two hubs overnight. Industry practice is to issue ' +
+        'goodwill vouchers and hotel reimbursements. You can fund the program or stick to the legal ' +
+        'minimum and absorb the press cycle.',
+      options: [
+        {
+          label: 'Fund goodwill vouchers ($20,000)',
+          disabledReason: (st) => st.human.cash >= 20_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 20_000;
+            st.pushNews(`${st.human.name} issued storm-delay vouchers — passengers thanked publicly.`);
+          },
+        },
+        {
+          label: 'Stick to legal minimum (−4 reputation)',
+          apply: (st) => {
+            st.human.reputation = Math.max(0, st.human.reputation - 4);
+            st.pushNews(`⚠ ${st.human.name} declined storm-delay goodwill. Passenger complaints made the news.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ===== HR / CREW =====
+
+  // ----- Mechanics union grievance: bonus or reputation hit. -----
+  {
+    id: 'mechanics-grievance',
+    requires: (s) => s.human.mechanics > 0,
+    build: () => ({
+      id: 'mechanics-grievance',
+      title: "Mechanics' Union Grievance",
+      description:
+        'The mechanics filed a formal grievance over rotating-shift scheduling. A one-time appreciation ' +
+        'bonus would settle the matter; refusing keeps cash on hand but the morale hit will show.',
+      options: [
+        {
+          label: 'Pay the bonus ($12,000)',
+          disabledReason: (st) => st.human.cash >= 12_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 12_000;
+            st.pushNews(`${st.human.name} settled a mechanics' grievance with a $12k bonus.`);
+          },
+        },
+        {
+          label: 'Refuse (−3 reputation)',
+          apply: (st) => {
+            st.human.reputation = Math.max(0, st.human.reputation - 3);
+            st.pushNews(`⚠ ${st.human.name} rejected a mechanics' grievance. Morale takes a hit.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Pilot fatigue lawsuit: settle or litigate. -----
+  {
+    id: 'pilot-fatigue-suit',
+    requires: (s) => s.human.pilots > 1 && s.stats.flights > 25,
+    build: () => ({
+      id: 'pilot-fatigue-suit',
+      title: 'Pilot Fatigue Lawsuit',
+      description:
+        'A former captain filed suit alleging fatigue-related scheduling violations. Settlement ' +
+        'gets you out at $30,000. Litigating is cheaper if you win — but losing costs $80,000.',
+      options: [
+        {
+          label: 'Settle ($30,000)',
+          disabledReason: (st) => st.human.cash >= 30_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 30_000;
+            st.pushNews(`${st.human.name} settled a pilot fatigue suit out of court for $30k.`);
+          },
+        },
+        {
+          label: 'Litigate (60% win $0, 40% lose $80,000)',
+          disabledReason: (st) => st.human.cash >= 80_000 ? null : 'Need $80k headroom to cover loss.',
+          apply: (st) => {
+            if (Math.random() < 0.6) {
+              st.pushNews(`★ ${st.human.name} won a fatigue-suit dismissal at trial — no payout.`);
+            } else {
+              st.human.cash -= 80_000;
+              st.pushNews(`⚠ ${st.human.name} lost a fatigue suit at trial — $80k payout.`);
+            }
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Flight attendant strike threat: pay or risk -----
+  {
+    id: 'fa-strike',
+    requires: (s) => s.stats.flights > 5,
+    build: () => ({
+      id: 'fa-strike',
+      title: 'Flight Attendant Strike Threat',
+      description:
+        'The flight attendants are voting on a one-day walkout next week. A pre-emptive bonus payment ' +
+        'usually defuses these. Refusing rolls the dice.',
+      options: [
+        {
+          label: 'Pre-emptive bonus ($18,000)',
+          disabledReason: (st) => st.human.cash >= 18_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 18_000;
+            st.pushNews(`${st.human.name} averted a flight-attendant walkout with a bonus.`);
+          },
+        },
+        {
+          label: 'Refuse — 50% chance of one-day strike (−5 rep)',
+          apply: (st) => {
+            if (Math.random() < 0.5) {
+              st.human.reputation = Math.max(0, st.human.reputation - 5);
+              st.pushNews(`⚠ Flight attendants walked out for a day at ${st.human.name}. −5 reputation.`);
+            } else {
+              st.pushNews(`${st.human.name} called the strike bluff — vote failed.`);
+            }
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Crew uniforms redesign: invest for rep. -----
+  {
+    id: 'uniform-redesign',
+    requires: (s) => s.human.pilots > 0,
+    build: () => ({
+      id: 'uniform-redesign',
+      title: 'Crew Uniform Redesign',
+      description:
+        'A boutique design house pitched a refresh of cabin and ground-crew uniforms. The new look ' +
+        'plays well in marketing photos — staff morale and brand both benefit.',
+      options: [
+        {
+          label: 'Commission the redesign ($15,000)',
+          disabledReason: (st) => st.human.cash >= 15_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 15_000;
+            st.human.reputation = Math.min(100, st.human.reputation + 4);
+            st.pushNews(`${st.human.name}'s new crew uniforms got industry magazine coverage. +4 rep.`);
+          },
+        },
+        {
+          label: 'Stick with current uniforms',
+          apply: (st) => {
+            st.pushNews(`${st.human.name} passed on a uniform redesign pitch.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ===== MARKETING / BRAND =====
+
+  // ----- Sports team sponsorship: bigger spend for bigger rep. -----
+  {
+    id: 'sports-sponsor',
+    requires: (s) => s.stats.flights > 15,
+    build: () => ({
+      id: 'sports-sponsor',
+      title: 'Sports Team Sponsorship',
+      description:
+        'A regional football team is looking for an official airline partner. The deal is $35,000 ' +
+        'for jersey placement and seat-back ads. Game-day visibility lifts brand recognition.',
+      options: [
+        {
+          label: 'Sign the deal ($35,000, +6 reputation)',
+          disabledReason: (st) => st.human.cash >= 35_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 35_000;
+            st.human.reputation = Math.min(100, st.human.reputation + 6);
+            st.pushNews(`${st.human.name} signed on as airline sponsor of a regional team. +6 rep.`);
+          },
+        },
+        {
+          label: 'Pass on the deal',
+          apply: (st) => {
+            st.pushNews(`${st.human.name} declined a sports sponsorship offer.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Trade show booth: small spend, small rep. -----
+  {
+    id: 'trade-show',
+    requires: () => true,
+    build: () => ({
+      id: 'trade-show',
+      title: 'Trade Show Booth',
+      description:
+        'A regional travel-industry trade show is courting exhibitors. A modest booth presence costs ' +
+        '$12,000 and reliably builds industry connections.',
+      options: [
+        {
+          label: 'Book a booth ($12,000, +3 reputation)',
+          disabledReason: (st) => st.human.cash >= 12_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 12_000;
+            st.human.reputation = Math.min(100, st.human.reputation + 3);
+            st.pushNews(`${st.human.name} exhibited at a travel trade show. +3 rep.`);
+          },
+        },
+        {
+          label: 'Skip the show',
+          apply: (st) => {
+            st.pushNews(`${st.human.name} skipped a regional trade show.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Influencer partnership: gamble. -----
+  {
+    id: 'influencer',
+    requires: (s) => s.stats.flights > 5,
+    build: () => ({
+      id: 'influencer',
+      title: 'Travel Influencer Partnership',
+      description:
+        'A travel-content creator with 2M followers wants a paid partnership — fly her on a free ' +
+        'route in exchange for a video review. Most posts do well; some backfire spectacularly.',
+      options: [
+        {
+          label: 'Sign the deal ($10,000) — 60% +4 rep, 40% −2 rep',
+          disabledReason: (st) => st.human.cash >= 10_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 10_000;
+            if (Math.random() < 0.6) {
+              st.human.reputation = Math.min(100, st.human.reputation + 4);
+              st.pushNews(`${st.human.name}'s influencer video went viral in a good way. +4 rep.`);
+            } else {
+              st.human.reputation = Math.max(0, st.human.reputation - 2);
+              st.pushNews(`⚠ The influencer's review trashed ${st.human.name}. −2 rep.`);
+            }
+          },
+        },
+        {
+          label: 'Decline',
+          apply: (st) => {
+            st.pushNews(`${st.human.name} declined an influencer partnership offer.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Loyalty program launch: big invest for big rep. -----
+  {
+    id: 'loyalty-program',
+    requires: (s) => s.human.routes.length >= 3,
+    build: () => ({
+      id: 'loyalty-program',
+      title: 'Frequent-Flyer Program Launch',
+      description:
+        'Marketing pitched a full-fledged miles + status loyalty program. Launch costs are real but ' +
+        'a successful program builds repeat customers and long-term brand equity.',
+      options: [
+        {
+          label: 'Launch the program ($50,000, +8 reputation)',
+          disabledReason: (st) => st.human.cash >= 50_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 50_000;
+            st.human.reputation = Math.min(100, st.human.reputation + 8);
+            st.pushNews(`★ ${st.human.name} launched a frequent-flyer program. +8 reputation.`);
+          },
+        },
+        {
+          label: 'Hold off',
+          apply: (st) => {
+            st.pushNews(`${st.human.name} deferred a loyalty program launch.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ===== FINANCE =====
+
+  // ----- Tax audit: pay accountant or gamble. -----
+  {
+    id: 'tax-audit',
+    requires: (s) => s.stats.flights > 20,
+    build: () => ({
+      id: 'tax-audit',
+      title: 'Corporate Tax Audit',
+      description:
+        'The tax authority opened a routine audit. You can retain an accountant to walk through the ' +
+        'books cleanly, or handle it in-house and accept whatever findings come up.',
+      options: [
+        {
+          label: 'Retain accountant ($15,000, clean audit)',
+          disabledReason: (st) => st.human.cash >= 15_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 15_000;
+            st.pushNews(`${st.human.name} passed a tax audit cleanly with retained counsel.`);
+          },
+        },
+        {
+          label: 'Handle in-house (50% chance of $25k fine)',
+          apply: (st) => {
+            if (Math.random() < 0.5) {
+              st.human.cash -= 25_000;
+              st.pushNews(`⚠ Tax audit fined ${st.human.name} $25k for filing irregularities.`);
+            } else {
+              st.pushNews(`${st.human.name} passed a tax audit on internal records.`);
+            }
+          },
+        },
+      ],
+    }),
+  },
+
+  // ===== INDUSTRY =====
+
+  // ----- Aviation magazine cover: cheap rep bump. -----
+  {
+    id: 'magazine-cover',
+    requires: (s) => s.stats.flights > 10,
+    build: () => ({
+      id: 'magazine-cover',
+      title: 'Aviation Magazine Cover',
+      description:
+        'A major aviation-trade magazine wants to put your CEO on next month\'s cover. Editorial is ' +
+        'free; they\'re asking for $5,000 to subsidize a longer photo shoot. Tiny spend, real exposure.',
+      options: [
+        {
+          label: 'Cover the photo shoot ($5,000, +5 reputation)',
+          disabledReason: (st) => st.human.cash >= 5_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 5_000;
+            st.human.reputation = Math.min(100, st.human.reputation + 5);
+            st.pushNews(`${st.human.name} made the cover of an aviation trade magazine. +5 rep.`);
+          },
+        },
+        {
+          label: 'Pass on the cover',
+          apply: (st) => {
+            st.pushNews(`${st.human.name} declined a magazine cover photo shoot.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Airline alliance invite: prestige spend. -----
+  {
+    id: 'alliance-invite',
+    requires: (s) => s.human.hubs.length > 1,
+    build: () => ({
+      id: 'alliance-invite',
+      title: 'Airline Alliance Invitation',
+      description:
+        'A global airline alliance is extending an invitation to join. Membership dues are steep, ' +
+        'but alliance affiliation is a prestige marker — and unlocks future codeshare possibilities.',
+      options: [
+        {
+          label: 'Join the alliance ($30,000, +7 reputation)',
+          disabledReason: (st) => st.human.cash >= 30_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 30_000;
+            st.human.reputation = Math.min(100, st.human.reputation + 7);
+            st.pushNews(`★ ${st.human.name} joined a global airline alliance. +7 reputation.`);
+          },
+        },
+        {
+          label: 'Decline membership',
+          apply: (st) => {
+            st.pushNews(`${st.human.name} declined an alliance invitation.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ===== MAINTENANCE / FLEET =====
+
+  // ----- Wing inspection program: preventative vs gamble. -----
+  {
+    id: 'wing-inspection',
+    requires: (s) => s.human.planes.length > 0,
+    build: (s) => {
+      const plane = pick(s.human.planes);
+      return {
+        id: 'wing-inspection',
+        title: 'Preventative Wing Inspection',
+        description:
+          `Maintenance recommends a preventative wing-spar inspection across the fleet. Skipping ` +
+          `the program is fine most of the time — but the next time a stress crack is missed, the ` +
+          `repair bill is much worse.`,
+        options: [
+          {
+            label: 'Run the program ($15,000)',
+            disabledReason: (st) => st.human.cash >= 15_000 ? null : 'Not enough cash.',
+            apply: (st) => {
+              st.human.cash -= 15_000;
+              st.pushNews(`${st.human.name} completed preventative wing inspections. No findings.`);
+            },
+          },
+          {
+            label: `Skip the program (${plane.name} condition −10%)`,
+            apply: (st) => {
+              plane.condition = Math.max(0.10, plane.condition - 0.10);
+              st.pushNews(`⚠ ${st.human.name} skipped wing inspections. ${plane.name} took the hit.`);
+            },
+          },
+        ],
+      };
+    },
+  },
+
+  // ===== PUBLIC RELATIONS =====
+
+  // ----- Customer complaint storm: damage control. -----
+  {
+    id: 'complaint-storm',
+    requires: (s) => s.stats.passengers > 5_000,
+    build: () => ({
+      id: 'complaint-storm',
+      title: 'Customer Complaint Storm',
+      description:
+        'A viral thread by a delayed passenger has snowballed into a wave of complaints on social ' +
+        'media. A coordinated apology campaign can defuse it; ignoring it lets the cycle play out.',
+      options: [
+        {
+          label: 'Apology campaign ($5,000)',
+          disabledReason: (st) => st.human.cash >= 5_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 5_000;
+            st.pushNews(`${st.human.name} responded to a complaint storm with a coordinated apology.`);
+          },
+        },
+        {
+          label: 'Ride it out (−3 reputation)',
+          apply: (st) => {
+            st.human.reputation = Math.max(0, st.human.reputation - 3);
+            st.pushNews(`⚠ ${st.human.name}'s complaint storm went unanswered. −3 reputation.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Lost luggage policy: invest in goodwill. -----
+  {
+    id: 'lost-luggage',
+    requires: (s) => s.stats.flights > 10,
+    build: () => ({
+      id: 'lost-luggage',
+      title: 'Lost Luggage Policy Overhaul',
+      description:
+        'Customer-relations pitched a generous new lost-baggage compensation policy. Implementation ' +
+        'costs are real but the goodwill compounds across thousands of future passengers.',
+      options: [
+        {
+          label: 'Implement the policy ($10,000, +3 reputation)',
+          disabledReason: (st) => st.human.cash >= 10_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 10_000;
+            st.human.reputation = Math.min(100, st.human.reputation + 3);
+            st.pushNews(`${st.human.name} rolled out a generous lost-baggage policy. +3 rep.`);
+          },
+        },
+        {
+          label: 'Keep the current policy',
+          apply: (st) => {
+            st.pushNews(`${st.human.name} kept the existing lost-baggage policy in place.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Holiday surge pricing scandal: refund or absorb hit. -----
+  {
+    id: 'surge-pricing',
+    requires: (s) => s.stats.flights > 10,
+    build: () => ({
+      id: 'surge-pricing',
+      title: 'Holiday Surge Pricing Scandal',
+      description:
+        'Press reports painted your holiday-period fares as predatory. A voluntary partial refund ' +
+        'program defuses the story; sticking to the algorithm rides out a rough press cycle.',
+      options: [
+        {
+          label: 'Issue refunds ($20,000)',
+          disabledReason: (st) => st.human.cash >= 20_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 20_000;
+            st.pushNews(`${st.human.name} refunded $20k of holiday-fare surge charges. Press cycle reversed.`);
+          },
+        },
+        {
+          label: 'Stand by the prices (−3 reputation)',
+          apply: (st) => {
+            st.human.reputation = Math.max(0, st.human.reputation - 3);
+            st.pushNews(`⚠ ${st.human.name} defended holiday surge pricing. −3 reputation.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Corporate documentary: free PR, but commit to access. -----
+  {
+    id: 'documentary',
+    requires: (s) => s.stats.flights > 30,
+    build: () => ({
+      id: 'documentary',
+      title: 'Streaming Documentary Series',
+      description:
+        'A streaming service is producing an industry documentary and wants behind-the-scenes ' +
+        'access to your operations. No money changes hands either way — but refusing reads as ' +
+        'secretive in the press.',
+      options: [
+        {
+          label: 'Grant filming access (+3 reputation)',
+          apply: (st) => {
+            st.human.reputation = Math.min(100, st.human.reputation + 3);
+            st.pushNews(`${st.human.name} gave behind-the-scenes access to a streaming doc. +3 rep.`);
+          },
+        },
+        {
+          label: 'Refuse access (−1 reputation)',
+          apply: (st) => {
+            st.human.reputation = Math.max(0, st.human.reputation - 1);
+            st.pushNews(`${st.human.name} refused documentary access. Press noted the secrecy.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ===== FLAVOR / MISC =====
+
+  // ----- Earthquake terminal damage: pay or lose face. -----
+  {
+    id: 'earthquake-damage',
+    requires: (s) => s.stats.flights > 5,
+    build: () => ({
+      id: 'earthquake-damage',
+      title: 'Terminal Earthquake Damage',
+      description:
+        'A minor quake near one of your hubs cracked terminal jet-bridge supports. Immediate repair ' +
+        'is $30,000 and keeps operations clean; delaying means visible scaffolding and a reputational hit.',
+      options: [
+        {
+          label: 'Immediate repair ($30,000)',
+          disabledReason: (st) => st.human.cash >= 30_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 30_000;
+            st.pushNews(`${st.human.name} repaired quake-damaged jet bridges quickly.`);
+          },
+        },
+        {
+          label: 'Delay the work (−5 reputation)',
+          apply: (st) => {
+            st.human.reputation = Math.max(0, st.human.reputation - 5);
+            st.pushNews(`⚠ ${st.human.name}'s damaged jet bridges drew bad press. −5 reputation.`);
+          },
+        },
+      ],
+    }),
+  },
+
+  // ----- Whistleblower bounty program: invest in culture. -----
+  {
+    id: 'whistleblower-program',
+    requires: (s) => s.stats.flights > 25,
+    build: () => ({
+      id: 'whistleblower-program',
+      title: 'Internal Ethics Program',
+      description:
+        'HR pitched establishing a formal internal whistleblower bounty + ethics review program. ' +
+        'Launch costs are real but the message it sends — both internally and to the press — is ' +
+        'durable.',
+      options: [
+        {
+          label: 'Establish the program ($20,000, +5 reputation)',
+          disabledReason: (st) => st.human.cash >= 20_000 ? null : 'Not enough cash.',
+          apply: (st) => {
+            st.human.cash -= 20_000;
+            st.human.reputation = Math.min(100, st.human.reputation + 5);
+            st.pushNews(`${st.human.name} launched an internal ethics program. +5 reputation.`);
+          },
+        },
+        {
+          label: 'Hold off',
+          apply: (st) => {
+            st.pushNews(`${st.human.name} declined an internal ethics program proposal.`);
+          },
+        },
+      ],
+    }),
+  },
 ];
 
 let daysSinceLast = 0;
