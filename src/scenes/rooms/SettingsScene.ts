@@ -111,6 +111,25 @@ export class SettingsScene extends RoomScene {
     });
     y += 56;
 
+    // -- Replay intro cinematic --
+    this.addText(left, y, 'Cinematic intro', 14);
+    this.addText(left + 8, y + 22,
+      'Replay the Dawn Takeoff opening sequence. Shows once on first launch; this lets you watch it again.',
+      11, COLORS.textDim);
+    const replayBtn = new Button({
+      scene: this,
+      x: rightEdge - 70,
+      y: y + 14,
+      width: 140,
+      height: 28,
+      label: 'Replay intro',
+      onClick: () => {
+        this.scene.launch('IntroScene', { replay: true });
+      },
+    });
+    this.content.add(replayBtn);
+    y += 56;
+
     // -- Pause on room entry --
     this.addText(left, y, 'Auto-pause when entering a room', 14);
     this.addText(left + 8, y + 22,

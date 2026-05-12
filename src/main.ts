@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, COLORS } from './config';
+import { IntroScene } from './scenes/IntroScene';
 import { BootScene } from './scenes/BootScene';
 import { AirportScene } from './scenes/AirportScene';
 import { HUDScene } from './scenes/HUDScene';
@@ -38,6 +39,7 @@ new Phaser.Game({
     mode: Phaser.Scale.FIT,
   },
   scene: [
+    IntroScene,
     BootScene,
     AirportScene,
     HUDScene,

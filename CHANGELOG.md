@@ -9,6 +9,62 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-12 — Dawn Takeoff cinematic intro
+
+Hub & Spoke now has an opening cinematic, reversing the original
+2026-05-09 scoping decision to skip one. Plays once on first launch
+(gated by `localStorage['hub-and-spoke-intro-seen']`), replayable
+any time from a new button in Settings → Interface → Cinematic
+intro.
+
+**Storyboard** — four phases, ~14.5 seconds total, skippable on
+any pointerdown or keypress:
+
+1. **Pre-dawn airport** (0–2.5s) — navy sky with 60 twinkling
+   stars, distant mountain silhouettes, lit terminal windows
+   (8×3 grid with ~55% lit), runway with edge lights and
+   center-line dashes, Cessna parked at Gate 1 facing the
+   runway.
+2. **Sunrise + takeoff** (2.5–7s) — sky lerps through purple
+   twilight into dawn orange (RGB-interpolated via
+   `Phaser.Display.Color.Interpolate.ColorWithColor`), an
+   orange sun + warm halo rise from the right horizon, the
+   Cessna taxis to the runway then accelerates and lifts off
+   (rotates −0.35 rad, climbs, recedes off-screen). Fires the
+   existing `'takeoff'` SFX.
+3. **Network grows** (7–11.5s) — cross-fade to a stylized world
+   (cool-blue base, curved earth horizon, six abstract continent
+   blobs). A gold pulsing hub dot anchors the left side; six
+   destination dots receive routes one by one, each route drawn
+   progressively as a quadratic-bezier arc with a tiny plane
+   silhouette flying the curve (rotated to the path tangent).
+4. **Title card** (11.5–14.5s) — dark veil fades in over the
+   map, **HUB & SPOKE** scales up with a `Back.easeOut` ease,
+   tagline _"a small airline. a big sky."_ fades in below, then
+   a blinking _"[ Click to begin ]"_ prompt.
+
+**Implementation** — new scene at `src/scenes/IntroScene.ts` is
+now the first entry in `main.ts`'s scene array. On boot it
+checks `hasSeenIntro()`; if `true` and not in replay mode it
+calls `scene.start('BootScene')` immediately, otherwise it plays
+through and hands off at the end. Replay path
+(`{ replay: true }` from Settings) launches on top of the
+running game and `scene.stop()`s itself when done — the
+underlying scene continues uninterrupted. Skipping mid-cinematic
+fast-forwards to the title card (so the user always sees the
+"Click to begin" prompt) rather than dumping straight to the
+slot picker.
+
+**Why now**: the user reversed the no-cinematic call — the boot
+flow had always felt abrupt going straight into a slot list.
+This sequence reuses the engine's existing visual vocabulary
+(plane silhouettes via `makePlaneIcon`, day/night palette,
+procedural title music via `sound.startMusic('title')`) so it
+costs almost no new asset weight while giving the game an
+identity moment.
+
+---
+
 ## 2026-05-11 — Intervention pool expansion v2: +21 templates (pool now 37)
 
 Doubled (and then some) the intervention pool from 16 to **37**.
