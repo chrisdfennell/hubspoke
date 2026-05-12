@@ -9,6 +9,54 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-12 — Save export / import (survive a localStorage wipe)
+
+Saves now live in two places: localStorage (as before) **and** any
+JSON files the player chooses to keep. If the browser cache gets
+cleared or you swap machines, you can re-import your save and pick
+up where you left off.
+
+**Per-slot — in the BootScene slot list:**
+- **Filled slots** now have a 2×2 button grid: Continue / New
+  (overwrite) up top, **Export** / Delete below. Export downloads
+  `hubspoke-slot{N}-{airline}-{YYYYMMDD}.json` (airline name is
+  slug-sanitized).
+- **Empty slots** get a new **Import save** button next to New
+  Game. Opens a file picker, validates the file, writes it into
+  the slot, and refreshes the list.
+
+**Bulk — in Settings → Save:**
+- **Download backup** bundles every filled slot into a single
+  `hubspoke-backup-{YYYYMMDD}.json` for one-click portability.
+- **Restore backup** reads a backup file, summarizes which slots
+  it contains, asks for destructive-action confirmation, then
+  overwrites those slot ids in localStorage.
+
+**Wire format** — wrapped JSON, not bare snapshots, so the format
+can evolve independently of the in-game `GameSnapshot`:
+```
+{ format: "hubspoke-save-v1",   exportedAt, saveVersion, snapshot }
+{ format: "hubspoke-backup-v1", exportedAt, saveVersion, slots: { "1": snap, ... } }
+```
+Imports validate both `format` and `saveVersion === SAVE_VERSION`
+before touching storage; mismatches are rejected with a clear
+error. (Same version-gate as the existing `readSlot` path — a
+save from a different game build won't silently corrupt your
+session.)
+
+**Implementation** — file picker uses a transient
+`<input type=file>` with a window-focus fallback so dismissed
+pickers reject instead of hanging. Downloads use a Blob + a
+temporary `<a download>` click, with the object URL revoked
+~1s later to give the browser time to claim it.
+
+**Why now**: localStorage is fragile — extension misbehavior,
+browser-data-clear UI, and "log out everywhere" actions all wipe
+it without warning. Now there's a real recovery path that
+doesn't need a backend.
+
+---
+
 ## 2026-05-12 — Dawn Takeoff cinematic intro
 
 Hub & Spoke now has an opening cinematic, reversing the original

@@ -2,8 +2,12 @@ import { GameState } from '../../state/GameState';
 import { COLORS } from '../../config';
 import { RoomScene } from '../../ui/RoomScene';
 import { Button } from '../../ui/Button';
-import { saveNow } from '../../systems/Save';
+import {
+  saveNow, exportAllSlotsJson, suggestBackupFilename, downloadJson,
+  pickJsonFile, summarizeBackup, importAllSlotsJson,
+} from '../../systems/Save';
 import { sound } from '../../systems/Sound';
+import { Modal } from '../../ui/Modal';
 
 /**
  * In-game settings panel. Toggles persist with the save (GameSnapshot.settings).
@@ -241,6 +245,42 @@ export class SettingsScene extends RoomScene {
     });
     y += 56;
 
+    // -- Backup all slots --
+    this.addText(left, y, 'Backup all slots to file', 14);
+    this.addText(left + 8, y + 22,
+      'Download every filled slot as a single JSON file. Keep it safe — survives a browser cache wipe or device swap.',
+      11, COLORS.textDim);
+    const backupBtn = new Button({
+      scene: this,
+      x: rightEdge - 70,
+      y: y + 14,
+      width: 140,
+      height: 28,
+      label: 'Download backup',
+      onClick: () => this.handleBackupAll(),
+    });
+    this.content.add(backupBtn);
+    y += 56;
+
+    // -- Restore from backup --
+    this.addText(left, y, 'Restore from backup file', 14);
+    this.addText(left + 8, y + 22,
+      'Read a backup JSON and overwrite the slots it contains. You\'ll be asked to confirm before anything is written.',
+      11, COLORS.textDim);
+    const restoreBtn = new Button({
+      scene: this,
+      x: rightEdge - 70,
+      y: y + 14,
+      width: 140,
+      height: 28,
+      label: 'Restore backup',
+      bg: 0x223046,
+      bgHover: 0x2d4a6a,
+      onClick: () => this.handleRestoreBackup(),
+    });
+    this.content.add(restoreBtn);
+    y += 56;
+
     // -- Section: World --
     this.addText(left, y, 'World', 16, COLORS.accentText);
     y += 30;
@@ -330,6 +370,60 @@ export class SettingsScene extends RoomScene {
       });
       this.content.add(btn);
     }
+  }
+
+  private handleBackupAll() {
+    const json = exportAllSlotsJson();
+    // Quick sanity check — does the backup actually contain any slots?
+    const slotsMatch = json.match(/"slots":\s*\{([^}]*)\}/);
+    const isEmpty = !slotsMatch || slotsMatch[1].trim() === '';
+    if (isEmpty) {
+      Modal.alert(this, {
+        title: 'No saves to back up',
+        message: 'All save slots are empty.',
+      });
+      return;
+    }
+    downloadJson(suggestBackupFilename(), json);
+    Modal.alert(this, {
+      title: 'Backup downloaded',
+      message: 'All filled slots have been bundled into a single JSON file. Keep it somewhere safe — you can use Restore backup to bring everything back.',
+    });
+  }
+
+  private handleRestoreBackup() {
+    pickJsonFile().then(raw => {
+      const summary = summarizeBackup(raw);
+      if ('error' in summary) {
+        Modal.alert(this, {
+          title: 'Restore failed',
+          message: summary.error,
+        });
+        return;
+      }
+      Modal.confirm(this, {
+        title: 'Restore backup?',
+        message: `This will overwrite slot${summary.count === 1 ? '' : 's'} ${summary.slotIds.map(n => `#${n}`).join(', ')} with the contents of the backup. Any existing saves in those slots will be lost. Continue?`,
+        confirmLabel: 'Overwrite',
+        destructive: true,
+        onConfirm: () => {
+          const result = importAllSlotsJson(raw);
+          if (!result.ok) {
+            Modal.alert(this, {
+              title: 'Restore failed',
+              message: result.error ?? 'Unknown error.',
+            });
+            return;
+          }
+          Modal.alert(this, {
+            title: 'Backup restored',
+            message: `${result.count} slot${result.count === 1 ? '' : 's'} restored. Reload the page or return to the title screen to see the saves.`,
+          });
+        },
+      });
+    }).catch(() => {
+      // Picker dismissed — silent.
+    });
   }
 
   /** Compact ON/OFF pill. `rightX` is the right edge the toggle should align to. */

@@ -153,6 +153,241 @@ export function findEmptySlot(): number | null {
   return null;
 }
 
+// ============================================================
+// Export / Import — survive a localStorage clear by downloading
+// slot JSON to a file, and read it back via a file picker.
+// ============================================================
+
+const EXPORT_FORMAT_SLOT = 'hubspoke-save-v1';
+const EXPORT_FORMAT_BACKUP = 'hubspoke-backup-v1';
+
+interface SlotExport {
+  format: typeof EXPORT_FORMAT_SLOT;
+  exportedAt: string;
+  saveVersion: number;
+  snapshot: GameSnapshot;
+}
+
+interface BackupExport {
+  format: typeof EXPORT_FORMAT_BACKUP;
+  exportedAt: string;
+  saveVersion: number;
+  slots: Record<string, GameSnapshot>;
+}
+
+export interface ImportResult {
+  ok: boolean;
+  error?: string;
+  /** For backup imports: number of slots written. */
+  count?: number;
+}
+
+/** Build the export-JSON string for a slot, or null if the slot is empty. */
+export function exportSlotJson(id: number): string | null {
+  const snap = readSlot(id);
+  if (!snap) return null;
+  const payload: SlotExport = {
+    format: EXPORT_FORMAT_SLOT,
+    exportedAt: new Date().toISOString(),
+    saveVersion: SAVE_VERSION,
+    snapshot: snap,
+  };
+  return JSON.stringify(payload, null, 2);
+}
+
+/** Build the export-JSON string for all filled slots. */
+export function exportAllSlotsJson(): string {
+  const slots: Record<string, GameSnapshot> = {};
+  for (let id = 1; id <= MAX_SLOTS; id++) {
+    const snap = readSlot(id);
+    if (snap) slots[String(id)] = snap;
+  }
+  const payload: BackupExport = {
+    format: EXPORT_FORMAT_BACKUP,
+    exportedAt: new Date().toISOString(),
+    saveVersion: SAVE_VERSION,
+    slots,
+  };
+  return JSON.stringify(payload, null, 2);
+}
+
+/** Suggested filename for a single-slot export, based on airline + in-game date. */
+export function suggestSlotFilename(id: number): string {
+  const snap = readSlot(id);
+  if (!snap) return `hubspoke-slot${id}.json`;
+  const airline = (snap.players[snap.humanIndex]?.name ?? 'airline')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 24);
+  const d = snap.date;
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `hubspoke-slot${id}-${airline}-${d.year}${pad(d.month)}${pad(d.day)}.json`;
+}
+
+export function suggestBackupFilename(): string {
+  const now = new Date();
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `hubspoke-backup-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}.json`;
+}
+
+/** Trigger a browser file download with the given JSON content. */
+export function downloadJson(filename: string, content: string) {
+  const blob = new Blob([content], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Slight delay before revoking — some browsers race the click handler.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Open a file picker and resolve the chosen file's text content. Rejects on
+ *  cancel or read error. Uses a transient <input type=file> appended to the
+ *  body and removed after the change event fires. */
+export function pickJsonFile(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+    input.style.display = 'none';
+    // Some browsers fire neither change nor cancel when the picker is
+    // dismissed — wire a focus fallback to reject after a short delay.
+    let settled = false;
+    const cleanup = () => {
+      if (input.parentNode) input.parentNode.removeChild(input);
+    };
+    input.addEventListener('change', () => {
+      const f = input.files?.[0];
+      if (!f) {
+        settled = true;
+        cleanup();
+        reject(new Error('No file chosen'));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        settled = true;
+        cleanup();
+        resolve(String(reader.result ?? ''));
+      };
+      reader.onerror = () => {
+        settled = true;
+        cleanup();
+        reject(reader.error ?? new Error('Read error'));
+      };
+      reader.readAsText(f);
+    });
+    window.addEventListener('focus', () => {
+      setTimeout(() => {
+        if (!settled) {
+          cleanup();
+          reject(new Error('Picker dismissed'));
+        }
+      }, 400);
+    }, { once: true });
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
+/** Parse a single-slot export JSON and write it to the given slot id.
+ *  Validates format + save version before touching storage. */
+export function importSlotJson(id: number, raw: string): ImportResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    return { ok: false, error: 'File is not valid JSON.' };
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    return { ok: false, error: 'File contents are not a save object.' };
+  }
+  const obj = parsed as Partial<SlotExport> & { snapshot?: GameSnapshot };
+  if (obj.format !== EXPORT_FORMAT_SLOT) {
+    return { ok: false, error: `Unrecognized file format "${obj.format ?? 'unknown'}". Expected a single-slot Hub & Spoke save.` };
+  }
+  if (obj.saveVersion !== SAVE_VERSION) {
+    return { ok: false, error: `Save version mismatch (file: ${obj.saveVersion}, current: ${SAVE_VERSION}). This save is from a different game build and cannot be imported.` };
+  }
+  const snap = obj.snapshot;
+  if (!snap || typeof snap !== 'object' || !Array.isArray(snap.players)) {
+    return { ok: false, error: 'Save snapshot is missing or malformed.' };
+  }
+  try {
+    localStorage.setItem(slotKey(id), JSON.stringify(snap));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: 'Browser refused to write the save (storage full?).' };
+  }
+}
+
+/** Parse a multi-slot backup JSON and write each contained slot into its
+ *  matching slot id. Overwrites existing data in those slots. */
+export function importAllSlotsJson(raw: string): ImportResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { ok: false, error: 'File is not valid JSON.' };
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    return { ok: false, error: 'File contents are not a backup object.' };
+  }
+  const obj = parsed as Partial<BackupExport>;
+  if (obj.format !== EXPORT_FORMAT_BACKUP) {
+    return { ok: false, error: `Unrecognized file format "${obj.format ?? 'unknown'}". Expected a multi-slot Hub & Spoke backup.` };
+  }
+  if (obj.saveVersion !== SAVE_VERSION) {
+    return { ok: false, error: `Save version mismatch (file: ${obj.saveVersion}, current: ${SAVE_VERSION}). This backup is from a different game build and cannot be imported.` };
+  }
+  if (!obj.slots || typeof obj.slots !== 'object') {
+    return { ok: false, error: 'Backup contains no slot data.' };
+  }
+  let count = 0;
+  try {
+    for (const [idStr, snap] of Object.entries(obj.slots)) {
+      const id = parseInt(idStr, 10);
+      if (!Number.isFinite(id) || id < 1 || id > MAX_SLOTS) continue;
+      if (!snap || typeof snap !== 'object' || !Array.isArray((snap as GameSnapshot).players)) continue;
+      localStorage.setItem(slotKey(id), JSON.stringify(snap));
+      count++;
+    }
+  } catch (e) {
+    return { ok: false, error: 'Browser refused to write the save (storage full?).' };
+  }
+  if (count === 0) {
+    return { ok: false, error: 'Backup contained no valid slots.' };
+  }
+  return { ok: true, count };
+}
+
+/** Inspect a backup file without writing — used to populate the confirm
+ *  dialog before overwriting existing slots. */
+export interface BackupSummary {
+  count: number;
+  slotIds: number[];
+}
+export function summarizeBackup(raw: string): BackupSummary | { error: string } {
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); } catch { return { error: 'File is not valid JSON.' }; }
+  if (!parsed || typeof parsed !== 'object') return { error: 'File contents are not a backup object.' };
+  const obj = parsed as Partial<BackupExport>;
+  if (obj.format !== EXPORT_FORMAT_BACKUP) return { error: `Unrecognized file format "${obj.format ?? 'unknown'}".` };
+  if (obj.saveVersion !== SAVE_VERSION) return { error: `Save version mismatch (file: ${obj.saveVersion}, current: ${SAVE_VERSION}).` };
+  if (!obj.slots) return { error: 'Backup contains no slot data.' };
+  const ids: number[] = [];
+  for (const idStr of Object.keys(obj.slots)) {
+    const id = parseInt(idStr, 10);
+    if (Number.isFinite(id) && id >= 1 && id <= MAX_SLOTS) ids.push(id);
+  }
+  ids.sort((a, b) => a - b);
+  return { count: ids.length, slotIds: ids };
+}
+
 let autoSaveRegistered = false;
 
 /**

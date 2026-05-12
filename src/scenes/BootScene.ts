@@ -20,6 +20,7 @@ import { maybeAutoDismissForLoadedSave } from '../systems/Tutorial';
 import {
   registerAutoSave, saveNow, listSlots, loadSlot, deleteSlot, setActiveSlot,
   SlotInfo, MAX_SLOTS,
+  exportSlotJson, suggestSlotFilename, downloadJson, pickJsonFile, importSlotJson,
 } from '../systems/Save';
 import { Button } from '../ui/Button';
 import { formatMoney } from '../systems/Clock';
@@ -129,12 +130,21 @@ export class BootScene extends Phaser.Scene {
         fontStyle: 'italic',
       }).setOrigin(0, 0.5));
 
+      const importBtn = new Button({
+        scene: this,
+        x: left + w - 230, y: cy, width: 130, height: 32,
+        label: 'Import save',
+        bg: 0x223046,
+        bgHover: 0x2d4a6a,
+        onClick: () => this.importIntoSlot(slot.id),
+      });
       const newBtn = new Button({
         scene: this,
         x: left + w - 90, y: cy, width: 140, height: 32,
         label: 'New Game',
         onClick: () => this.openDifficultyPicker(slot.id),
       });
+      this.slotLayer.add(importBtn);
       this.slotLayer.add(newBtn);
       return;
     }
@@ -151,11 +161,21 @@ export class BootScene extends Phaser.Scene {
       { fontFamily: 'Segoe UI, Tahoma, sans-serif', fontSize: '12px', color: COLORS.textDim }
     ).setOrigin(0, 0.5));
 
+    // 2×2 button grid:  Continue | Overwrite
+    //                   Export   | Delete
     const continueBtn = new Button({
       scene: this,
-      x: left + w - 220, y: cy, width: 110, height: 30,
+      x: left + w - 220, y: cy - 16, width: 110, height: 26,
       label: 'Continue',
       onClick: () => this.continueSlot(slot.id),
+    });
+    const exportBtn = new Button({
+      scene: this,
+      x: left + w - 220, y: cy + 14, width: 110, height: 26,
+      label: 'Export',
+      bg: 0x223046,
+      bgHover: 0x2d4a6a,
+      onClick: () => this.exportSlot(slot.id, slot.airlineName ?? 'this save'),
     });
     const overwriteBtn = new Button({
       scene: this,
@@ -191,8 +211,47 @@ export class BootScene extends Phaser.Scene {
       },
     });
     this.slotLayer.add(continueBtn);
+    this.slotLayer.add(exportBtn);
     this.slotLayer.add(overwriteBtn);
     this.slotLayer.add(deleteBtn);
+  }
+
+  /** Trigger a browser download of the given slot's save JSON. */
+  private exportSlot(id: number, airlineName: string) {
+    const json = exportSlotJson(id);
+    if (!json) {
+      Modal.alert(this, {
+        title: 'Nothing to export',
+        message: `Slot #${id} is empty.`,
+      });
+      return;
+    }
+    downloadJson(suggestSlotFilename(id), json);
+    Modal.alert(this, {
+      title: 'Save exported',
+      message: `Downloaded "${airlineName}" as a JSON file. Keep it somewhere safe — you can re-import it into any empty slot if your browser storage gets cleared.`,
+    });
+  }
+
+  /** Open a file picker and import its contents into the given empty slot. */
+  private importIntoSlot(id: number) {
+    pickJsonFile().then(raw => {
+      const result = importSlotJson(id, raw);
+      if (!result.ok) {
+        Modal.alert(this, {
+          title: 'Import failed',
+          message: result.error ?? 'Unknown error reading the save file.',
+        });
+        return;
+      }
+      Modal.alert(this, {
+        title: 'Save imported',
+        message: `Slot #${id} now holds the imported save. Click Continue to play it.`,
+        onClose: () => this.renderSlots(),
+      });
+    }).catch(() => {
+      // Picker dismissed — silent.
+    });
   }
 
   private continueSlot(id: number) {
