@@ -9,6 +9,56 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-13 (balance) — Short-haul yield lift
+
+**Reported complaint**: "$300/flight starting out in HNL feels punishingly
+grindy." Confirmed — a starter Cessna on HNL→OGG netted ~$334/flight
+under the old fare model, and recouping the $1.2M Cessna cost took
+~1,800 round-trips.
+
+### What changed
+
+`suggestedTicketPrice` formula:
+
+| | Before | After |
+|---|---|---|
+| Base fare | $30 | **$60** |
+| Per-km | $0.12 | $0.12 (unchanged) |
+| Floor | $40 | **$60** |
+
+The base fare represents fixed costs (taxes, boarding, terminal use,
+ground handling) that don't scale with distance. Doubling it lifts
+short-haul where the per-km term is small, while leaving long-haul
+(where per-km dominates) roughly unchanged.
+
+### Concrete impact
+
+| Route | Distance | Old fare | New fare | Δ |
+|---|---|---|---|---|
+| HNL → OGG (Maui) | 150 km | $45 | $70 | +55% |
+| HNL → KOA (Kona) | 280 km | $55 | $85 | +55% |
+| HNL → LAX | 4,100 km | $600 | $635 | +6% |
+| LHR → JFK | 5,550 km | $1,045 | $1,090 | +4% |
+
+**Starter Cessna HNL→OGG profit**: $334 → **$604** per flight (+81%).
+
+Long-haul barely moves — at 4,000+ km the per-km term ($0.12 × 4000 =
+$480) swamps the base bump. So big planes on big routes aren't getting
+over-buffed; small planes on short hops are getting the help they need.
+
+### Migration (v3)
+
+`CURRENT_BALANCE_VERSION` bumped 2 → 3. New v3 migration walks every
+existing route on load and bumps any that's priced below **70% of the
+new fair fare** up to the new fair. Same threshold as v1 (the previous
+yield rebalance), just against the new formula. News ticker announces
+how many fares were updated on the first load after the patch.
+
+Pre-patch saves continue to load fine — they just get the price bump
+applied on first launch after the update.
+
+---
+
 ## 2026-05-13 (one more) — Crew morale + fatigue
 
 The last shallow system. Personnel was "hire enough pilots/mechanics,

@@ -76,7 +76,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
 
 /** Bump when a backwards-incompatible balance change ships. The migrator in
  *  Economy.migrateBalance() reads this to decide whether to rewrite legacy data. */
-export const CURRENT_BALANCE_VERSION = 2;
+export const CURRENT_BALANCE_VERSION = 3;
 
 /** Career stats for the human player. Read live in the Stats panel and on
  *  game-over; recorded cumulatively across the run by the systems that

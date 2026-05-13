@@ -31,12 +31,16 @@ export function getFuelPrice(): number {
 }
 
 export function suggestedTicketPrice(distanceKm: number, demandFrom: number, demandTo: number): number {
-  // Yield model: a $30 base fare (taxes / boarding / terminal use) plus
+  // Yield model: a $60 base fare (taxes / boarding / terminal use) plus
   // $0.12/km, scaled by average city demand. Rounded to nearest $5, with a
-  // $40 floor so very short hops still cover ground handling.
+  // $60 floor so very short hops still cover ground handling. Bumped from
+  // a $30 base in v3 (2026-05-13) — early-game short-hop profit was
+  // ~$300/flight on a starter Cessna which felt punishingly grindy. The
+  // higher base shifts short-haul up ~55% while leaving long-haul (where
+  // the per-km term dominates) roughly where it was.
   const avgDemand = (demandFrom + demandTo) / 2;
-  const adj = (30 + distanceKm * 0.12) * avgDemand;
-  return Math.max(40, Math.round(adj / 5) * 5);
+  const adj = (60 + distanceKm * 0.12) * avgDemand;
+  return Math.max(60, Math.round(adj / 5) * 5);
 }
 
 /** How many minutes a flight takes given plane speed and distance. */
@@ -157,6 +161,10 @@ export function flightProfit(plane: Plane, route: Route): { revenue: number; fue
  *       AI's idle planes there, and clears stale routes so the AI rebuilds
  *       its network from the right hub. Fixes saves that predate the AI-hub
  *       distribution (everyone was at HNL by default).
+ *  v3 — Bumps existing route fares to the new fair price after the
+ *       `$30 base → $60 base` rebalance. Same 70%-of-fair threshold as
+ *       v1, just against the new formula. Short-haul routes were the most
+ *       under-monetized, so this is mostly a short-haul price-level lift.
  */
 export function migrateBalance(): boolean {
   const state = GameState.get();
@@ -209,6 +217,25 @@ export function migrateBalance(): boolean {
     }
     if (moved > 0) {
       state.pushNews(`Rivals relocated: ${moved} airline${moved === 1 ? '' : 's'} moved to their proper home hubs.`);
+    }
+  }
+
+  // ----- v3: route ticket prices after the base-fare lift -----
+  if (from < 3) {
+    let bumped = 0;
+    for (const player of state.players) {
+      for (const route of player.routes) {
+        const a = getCity(route.fromCity);
+        const b = getCity(route.toCity);
+        const fair = suggestedTicketPrice(route.distanceKm, a.demand, b.demand);
+        if (route.ticketPrice < fair * 0.7) {
+          route.ticketPrice = fair;
+          bumped++;
+        }
+      }
+    }
+    if (bumped > 0) {
+      state.pushNews(`Pricing rebalance: ${bumped} route fare${bumped === 1 ? '' : 's'} updated for the new short-haul yield model.`);
     }
   }
 
