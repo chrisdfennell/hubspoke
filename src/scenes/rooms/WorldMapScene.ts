@@ -6,12 +6,7 @@ import { CONTINENTS, ISLANDS } from '../../state/worldMapData';
 import { Button } from '../../ui/Button';
 import { formatMoney } from '../../systems/Clock';
 import { sound } from '../../systems/Sound';
-
-/** Cost to open a new hub at a city — scales with city demand so big markets
- *  cost more than backwaters. */
-function hubCost(city: CityData): number {
-  return Math.round(city.demand * 5_000_000);
-}
+import { hubCost } from '../../state/Player';
 
 /**
  * 2D world map. Equirectangular projection (lon→x, lat→y) with mouse-wheel

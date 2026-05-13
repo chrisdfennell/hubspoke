@@ -9,6 +9,65 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-13 (still) — Smarter AI phase 2: hubs, upgrades, boosts
+
+Three player-only mechanics the AI was just… not using. Now wired in.
+
+### AI expands to new hubs
+
+Each AI rival was stuck at their starting home (`HNL/LAX/JFK/LHR`) for
+the whole run. New `aiExpandHubs`:
+
+- Requires fleet ≥3 planes AND cash ≥ 3× the hub cost (so they don't
+  bankrupt themselves buying real estate they can't use).
+- Capped at **3 hubs per AI** to prevent late-game sprawl into every
+  city on the map.
+- Roll probability `aiBuyChance × 0.5` so expansion stays occasional.
+- Scoring is the same shape as route picking: `demand × 10 − rivalHubsHere × 4`,
+  so AIs spread out instead of all dogpiling JFK.
+
+`hubCost` was a private function in `WorldMapScene` — moved to
+`state/Player.ts` alongside `gateExpansionCost` so the AI calls the
+same formula the human pays.
+
+### AI outfits its fleet
+
+Plane upgrades (livery / interior / entertainment from the Workshop's
+Outfit tab) were a human-only economic advantage. New `aiBuyUpgrades`:
+
+- Rolls at `aiBuyChance × 0.4` — even Brutal AIs upgrade about every
+  third day rather than nightly.
+- Priority: **interior** (biggest LF multiplier) → **entertainment**.
+  Skips livery — pure cosmetic, AI doesn't care about tail-fin colors.
+- Tier-capped by plane class so the AI doesn't equip $1.2M lie-flat
+  suites on a $1.2M Cessna: turboprop ≤ $200K, narrowbody ≤ $600K,
+  widebody ≤ $1.5M.
+- Picks the highest LF-bump option that fits both the ceiling and the
+  AI's cash. One upgrade per daily turn so spending is gradual.
+- Freighters (seats=0) skip — they'd derive no benefit.
+
+### AI uses Duty Free boosts
+
+`Marketing Campaign`, `Press Conference`, `Pilot Training Course`
+were also human-only. New `aiUseBoosts`:
+
+- **Press Spin** ($50K, +3 rep) or **Marketing** ($100K, +5 rep) when
+  reputation < 70. Press spin first since it's the cheaper rescue.
+- **Pilot Training Course** ($150K, +20% condition to all planes) when
+  fleet average condition < 0.6 — cheaper than hand-repairing each
+  airframe.
+- Respects the same per-item one-per-day cooldown via
+  `player.boostUsedOn` so AI can't double-dip in a way the human can't.
+
+### Refactors to enable this
+
+- `hubCost(city)` moved from `WorldMapScene.ts` → `state/Player.ts`.
+- `applyBoost` extracted from `DutyFreeScene` → `applyBoostEffect(player, itemId)`
+  in `state/items.ts`. Both DutyFreeScene and AI call the shared
+  function so any future boost effect lands in one place.
+
+---
+
 ## 2026-05-13 (latest) — Difficulty-scaled AI: cargo, stock sells, used market
 
 The recently-shipped AI behaviors (cargo bidding, stock selling, used-

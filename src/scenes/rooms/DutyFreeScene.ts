@@ -3,8 +3,7 @@ import { COLORS } from '../../config';
 import { RoomScene } from '../../ui/RoomScene';
 import { Button } from '../../ui/Button';
 import { formatMoney } from '../../systems/Clock';
-import { ITEMS, ItemCategory } from '../../state/items';
-import { getPlaneModel } from '../../state/catalog';
+import { ITEMS, ItemCategory, applyBoostEffect } from '../../state/items';
 import { getCEO } from '../../state/ceos';
 
 /** Absolute day index — simplified 30-day months, 12-month years. Used by
@@ -112,21 +111,6 @@ export class DutyFreeScene extends RoomScene {
   }
 
   private applyBoost(id: string) {
-    const me = GameState.get().human;
-    switch (id) {
-      case 'marketing':
-        me.reputation = Math.min(100, me.reputation + 5);
-        break;
-      case 'press-spin':
-        me.reputation = Math.min(100, me.reputation + 3);
-        break;
-      case 'pilot-prog':
-        for (const plane of me.planes) {
-          plane.condition = Math.min(1.0, plane.condition + 0.20);
-          // Clear any lingering reference to the model (no-op, just here for future use).
-          void getPlaneModel(plane.modelId);
-        }
-        break;
-    }
+    applyBoostEffect(GameState.get().human, id);
   }
 }

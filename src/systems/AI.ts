@@ -10,6 +10,10 @@ import { getCEO } from '../state/ceos';
 import { clock } from './Clock';
 import { acceptContract, dispatchCargo } from './Cargo';
 import { buyUsedPlane } from './UsedMarket';
+import { hubCost } from '../state/Player';
+import { UPGRADES } from '../state/upgrades';
+import { ITEMS, applyBoostEffect } from '../state/items';
+import { dateToDay } from '../state/demandModifiers';
 
 /**
  * Daily AI turn — each rival follows the same constraints the human does
@@ -82,6 +86,20 @@ export function aiDailyTurn() {
     // shows up. Rolls at half the aiBuyChance rate so the AI doesn't
     // sweep the market clean every day on higher difficulties.
     aiShopUsed(player);
+
+    // Hub expansion — once an AI has 3+ planes and a healthy cash buffer
+    // it considers opening a new hub at a high-demand city it doesn't
+    // already operate from.
+    aiExpandHubs(player);
+
+    // Outfit planes: interior + entertainment upgrades buy meaningful
+    // load-factor bumps and were a player-only advantage until now.
+    aiBuyUpgrades(player);
+
+    // Duty Free boosts on cooldown — marketing/press-spin for rep,
+    // pilot-training when the fleet is worn down. Same per-day cooldown
+    // the human respects in the Duty Free room.
+    aiUseBoosts(player);
   }
 }
 
@@ -362,6 +380,133 @@ function aiBidCargo(player: Player) {
     const result = dispatchCargo(player, contract.id, plane.id);
     if (result.ok) {
       accepted++;
+    }
+  }
+}
+
+/**
+ * Buy a new hub at a high-demand city. Requires fleet ≥3 planes AND
+ * cash ≥ 3× the cheapest reachable hub cost (so the AI doesn't drain
+ * the bank on a hub it can't immediately use). Skips cities already in
+ * the AI's hub list. Rolls at half `aiBuyChance` so expansion stays
+ * occasional rather than every-day.
+ */
+function aiExpandHubs(player: Player) {
+  const state = GameState.get();
+  const cfg = getDifficulty(state.difficulty);
+  if (player.planes.length < 3) return;
+  // Cap at 3 hubs per AI so they don't sprawl into every city on the map.
+  if (player.hubs.length >= 3) return;
+  if (Math.random() >= cfg.aiBuyChance * 0.5) return;
+
+  // Candidate cities: not already a hub, and the AI can afford it with
+  // a 2× cash buffer afterward for crew + a plane.
+  const candidates = CITIES.filter(c => {
+    if (player.hubs.includes(c.id)) return false;
+    return player.cash >= hubCost(c) * 3;
+  });
+  if (candidates.length === 0) return;
+
+  // Score by demand minus rival-already-here penalty so the AI picks
+  // fat markets that aren't already crowded with hubs.
+  let best = candidates[0];
+  let bestScore = -Infinity;
+  for (const c of candidates) {
+    let rivalHubs = 0;
+    for (const p of state.players) {
+      if (p.id === player.id) continue;
+      if (p.hubs.includes(c.id)) rivalHubs++;
+    }
+    const score = c.demand * 10 - rivalHubs * 4 + Math.random() * 0.5;
+    if (score > bestScore) { bestScore = score; best = c; }
+  }
+
+  player.cash -= hubCost(best);
+  player.hubs.push(best.id);
+  state.pushNews(`${player.name} opened a new hub at ${best.name}.`);
+}
+
+/**
+ * Buy one upgrade per turn for the AI's most-capable unoutfitted plane.
+ * Prefers interior (biggest LF multiplier) over entertainment, skips
+ * livery entirely (cosmetic — AI doesn't care about tail-fin colors).
+ *
+ * Sizes the upgrade tier to the plane class: turboprops get cheap
+ * entries, narrowbodies get mid-tier, widebodies get top-tier. Avoids
+ * the absurd "$1.2M lie-flat suites on a Cessna" outcome.
+ */
+function aiBuyUpgrades(player: Player) {
+  const state = GameState.get();
+  const cfg = getDifficulty(state.difficulty);
+  // Modest daily roll — even Brutal AIs upgrade ~1/3 of days, not every day.
+  if (Math.random() >= cfg.aiBuyChance * 0.4) return;
+
+  // Tier ceiling by plane class: Cessna shouldn't equip lie-flat suites.
+  const maxPriceByClass: Record<string, number> = {
+    turboprop:  200_000,
+    narrowbody: 600_000,
+    widebody:  1_500_000,
+  };
+
+  for (const plane of player.planes) {
+    const model = getPlaneModel(plane.modelId);
+    if (model.seats === 0) continue; // freighters skip pax upgrades
+    const ceiling = maxPriceByClass[model.cls] ?? 200_000;
+
+    // Try interior first (biggest LF bump), then entertainment.
+    for (const cat of ['interior', 'entertainment'] as const) {
+      if (plane.upgrades[cat]) continue;
+      // Best affordable upgrade in this category for this plane's tier.
+      const candidates = UPGRADES.filter(u =>
+        u.category === cat &&
+        u.price <= ceiling &&
+        u.price <= player.cash
+      ).sort((a, b) => (b.loadFactorBonus ?? 0) - (a.loadFactorBonus ?? 0));
+      if (candidates.length === 0) continue;
+      const u = candidates[0];
+      player.cash -= u.price;
+      plane.upgrades[cat] = u.id;
+      return; // one upgrade per daily turn — keeps spend gradual
+    }
+  }
+}
+
+/**
+ * Use a Duty Free boost when it would matter. Marketing / Press Spin
+ * fire when reputation < 70; Pilot Training Course fires when the fleet
+ * average condition < 0.6. Respects the per-item one-per-day cooldown
+ * via `player.boostUsedOn` so the AI can't stack two boosts on the
+ * same day any more than the human can.
+ */
+function aiUseBoosts(player: Player) {
+  const state = GameState.get();
+  const today = dateToDay(state.date);
+
+  // Helper to check + apply + stamp cooldown atomically.
+  const tryBoost = (itemId: string): boolean => {
+    const item = ITEMS.find(i => i.id === itemId);
+    if (!item) return false;
+    if ((player.boostUsedOn[itemId] ?? -1) === today) return false;
+    if (player.cash < item.price) return false;
+    player.cash -= item.price;
+    applyBoostEffect(player, itemId);
+    player.boostUsedOn[itemId] = today;
+    return true;
+  };
+
+  // Reputation rescue: a low-rep AI loses passengers AND becomes a takeover
+  // target, so the cheap Press Spin pays for itself fast.
+  if (player.reputation < 70) {
+    if (tryBoost('press-spin')) return;
+    if (tryBoost('marketing')) return;
+  }
+
+  // Fleet-wide refit: when several planes are tired, a single Pilot Training
+  // Course refit is cheaper than hand-repairing every airframe.
+  if (player.planes.length > 0) {
+    const avgCondition = player.planes.reduce((sum, p) => sum + p.condition, 0) / player.planes.length;
+    if (avgCondition < 0.6) {
+      if (tryBoost('pilot-prog')) return;
     }
   }
 }

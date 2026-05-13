@@ -49,3 +49,25 @@ export function getItem(id: string): Item {
   if (!m) throw new Error(`Unknown item: ${id}`);
   return m;
 }
+
+/**
+ * Apply a boost item's effect to `player`. Shared between DutyFreeScene
+ * (human buys + uses on the same click) and AI.aiUseBoosts (rivals roll
+ * for boost use each daily turn). Caller is responsible for charging
+ * cash and stamping `boostUsedOn` cooldown.
+ */
+export function applyBoostEffect(player: import('./Player').Player, itemId: string) {
+  switch (itemId) {
+    case 'marketing':
+      player.reputation = Math.min(100, player.reputation + 5);
+      break;
+    case 'press-spin':
+      player.reputation = Math.min(100, player.reputation + 3);
+      break;
+    case 'pilot-prog':
+      for (const plane of player.planes) {
+        plane.condition = Math.min(1.0, plane.condition + 0.20);
+      }
+      break;
+  }
+}

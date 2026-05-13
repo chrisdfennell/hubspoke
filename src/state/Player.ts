@@ -19,6 +19,14 @@ export function gateExpansionCost(currentGates: number, hub: CityData): number {
   return Math.round((currentGates - 6) * 1_000_000 * hub.demand);
 }
 
+/** Cost in $ to open a new hub at `city`. Scales with city demand so a
+ *  big market (JFK at 1.5) costs $7.5M while a backwater costs less.
+ *  Shared between the human's WorldMapScene buy panel and the AI's
+ *  expansion logic so both pay the same. */
+export function hubCost(city: CityData): number {
+  return Math.round(city.demand * 5_000_000);
+}
+
 export interface PlayerSnapshot {
   id: string;
   name: string;
