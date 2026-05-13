@@ -68,6 +68,10 @@ export interface PlayerSnapshot {
   /** Game-day index of the most recent dividend payment. Next dividend
    *  pays out 90 days after this. */
   lastDividendDay?: number;
+  /** Crew morale 0..100. Drops when crew is overworked or after
+   *  crashes/incidents; recovers slowly when rested. Drives passenger
+   *  load-factor adjustment + mishap chance multiplier. */
+  morale?: number;
 }
 
 export class Player {
@@ -133,6 +137,12 @@ export class Player {
    *  declares a dividend so the first payout is one full quarter out. */
   lastDividendDay: number = 0;
 
+  /** Crew morale 0..100. Starts at 70 (decent), drops when crew is
+   *  overworked (more planes flying than pilots can handle) or after
+   *  crashes/incidents, recovers ~+2/day when rested. Drives a small
+   *  load-factor adjustment + mishap-chance multiplier on flights. */
+  morale: number = 70;
+
   /** Number of apron gates available at the given hub. */
   gatesAt(hubId: string): number {
     return this.gateCounts[hubId] ?? STARTING_GATES;
@@ -177,6 +187,7 @@ export class Player {
       missedLoanPayments: this.missedLoanPayments,
       dividendPerShare: this.dividendPerShare,
       lastDividendDay: this.lastDividendDay,
+      morale: this.morale,
     };
   }
 
@@ -205,6 +216,7 @@ export class Player {
     p.missedLoanPayments = s.missedLoanPayments ?? 0;
     p.dividendPerShare = s.dividendPerShare ?? 0;
     p.lastDividendDay = s.lastDividendDay ?? 0;
+    p.morale = s.morale ?? 70;
     return p;
   }
 }

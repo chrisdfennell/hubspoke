@@ -9,6 +9,74 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-13 (one more) — Crew morale + fatigue
+
+The last shallow system. Personnel was "hire enough pilots/mechanics,
+done" forever. Now crews have a morale score that drops when
+overworked and after crashes/incidents, and bounces back when rested.
+
+### State
+
+New `Player.morale: number = 70` (persisted in snapshot, defaults to 70
+for pre-feature saves). Symmetric — AI rivals carry their own morale
+and hit the same feedback loops.
+
+### Daily morale tick
+
+Driven by **crew utilization** = `(planes assigned to routes) / pilots`:
+
+| Utilization | Daily delta |
+|---|---|
+| > 1.5  (severely overworked) | −3 |
+| > 1.0  (overworked)          | −1 |
+| 0.5..1.0 (balanced)          | 0  |
+| < 0.5  (rested)              | +2 |
+
+Below **30** morale ("In revolt"), there's a **10% daily chance** a
+crew member resigns — biased toward whichever role is bigger so the
+fleet doesn't get stranded by the last pilot walking. After the quit,
+morale jumps +10 because the remaining crew is now less overworked
+(captures the "things have to get worse before they get better"
+dynamic).
+
+### Event-driven hits
+
+- **Crash**: −10 morale on top of the existing −25 rep + plane loss.
+- **Incident**: −3 morale on top of −5 rep + emergency repair.
+
+### Gameplay effects
+
+- **Load factor** (Economy.flightProfit): morale ≥80 gives **+3% LF**;
+  morale ≤40 gives **−3% LF**. Neutral middle band has no effect.
+- **Mishap chance** (Flights.maybeMishap): existing `failChance`
+  multiplied by `1 + max(0, 50−morale)/100`. At morale 0 mishaps are
+  50% more likely than a baseline neglected plane; at morale ≥50 it's
+  the same as before.
+- **Hire bonus**: hiring a pilot or mechanic bumps morale +2 (small
+  symbolic signal that help is on the way).
+
+### Personnel scene
+
+New "Crew morale" section above the pilots/mechanics rows:
+- 240px morale bar color-coded by band (Energized green / Content
+  amber / Strained orange / Burned out pink / In revolt red).
+- Current utilization % + label so you can see *why* morale is
+  trending.
+- One-liner explaining the cutoffs: ≥80 +3% LF, ≤40 −3% LF + more
+  mishaps, <30 crew may quit.
+
+### Bands (`moraleLabel`)
+
+| Range  | Label       | Color   |
+|--------|-------------|---------|
+| 80–100 | Energized   | green   |
+| 60–79  | Content     | amber   |
+| 40–59  | Strained    | orange  |
+| 20–39  | Burned out  | pink    |
+| 0–19   | In revolt   | red     |
+
+---
+
 ## 2026-05-13 (closing) — Workshop tabs
 
 Adding the used-plane market on top of the buy table + fleet list made

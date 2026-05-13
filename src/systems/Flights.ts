@@ -2,7 +2,7 @@ import { GameState, GameDate } from '../state/GameState';
 import { Plane } from '../state/Plane';
 import { Route } from '../state/Route';
 import { flightMinutes, flightProfit, expectedLoadFactor, migrateBalance, fuelCost } from './Economy';
-import { maxPlanesStaffed } from './Personnel';
+import { maxPlanesStaffed, moraleMishapMult, MORALE_CRASH_HIT, MORALE_INCIDENT_HIT } from './Personnel';
 import { sound } from './Sound';
 import { clock } from './Clock';
 import { distanceKm, getCity } from '../state/catalog';
@@ -138,8 +138,11 @@ export function dispatchIdlePlanes() {
  */
 function maybeMishap(player: Player, plane: Plane, passengers: number) {
   if (plane.condition >= 0.5) return;
-  // Linear ramp from 0% chance at cond=0.5 to 20% at cond=0.0.
-  const failChance = (0.5 - plane.condition) * 0.4;
+  // Linear ramp from 0% chance at cond=0.5 to 20% at cond=0.0. Morale
+  // amplifies — overworked, low-morale crews miss problems that would
+  // otherwise be caught pre-flight.
+  let failChance = (0.5 - plane.condition) * 0.4;
+  failChance *= moraleMishapMult(player.morale);
   if (Math.random() >= failChance) return;
 
   const state = GameState.get();
@@ -151,6 +154,7 @@ function maybeMishap(player: Player, plane: Plane, passengers: number) {
     const paxLoss = passengers * 10_000;
     player.cash -= paxLoss;
     player.reputation = Math.max(0, player.reputation - 25);
+    player.morale = Math.max(0, player.morale - MORALE_CRASH_HIT);
     // Drop the plane from the fleet. routeId references go stale gracefully
     // — flightProfit / dispatch all key off the plane object itself.
     const idx = player.planes.indexOf(plane);
@@ -169,6 +173,7 @@ function maybeMishap(player: Player, plane: Plane, passengers: number) {
     const paxLoss = passengers * 2_000;
     player.cash -= paxLoss;
     player.reputation = Math.max(0, player.reputation - 5);
+    player.morale = Math.max(0, player.morale - MORALE_INCIDENT_HIT);
     // Emergency repair to 50% — the plane lives but is grounded until the
     // player tops it up in the Workshop (or until auto-repair fires).
     plane.condition = Math.max(plane.condition, 0.5);

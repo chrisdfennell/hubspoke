@@ -4,6 +4,7 @@ import { Route } from '../state/Route';
 import { getCity, getPlaneModel, DEFAULT_AIRLINES, HOME_AIRPORT } from '../state/catalog';
 import { getDemandMult } from '../state/demandModifiers';
 import { planeLoadFactorBonus } from '../state/upgrades';
+import { moraleLoadFactorMult } from './Personnel';
 import { clock } from './Clock';
 
 /** Fuel price in $ per liter (drifts day to day, mean-reverting to FUEL_BASELINE). */
@@ -127,7 +128,12 @@ export function flightProfit(plane: Plane, route: Route): { revenue: number; fue
   // Per-plane interior + entertainment upgrades multiply the effective load
   // factor — full business cabin + streaming suite + WiFi stacks to roughly
   // +20%. Capped at 1.0 so we never exceed seat count.
-  lf = Math.min(1, lf * planeLoadFactorBonus(plane.upgrades));
+  lf *= planeLoadFactorBonus(plane.upgrades);
+  // Crew morale touches LF at the edges only: +3% when energized, -3%
+  // when strained or worse. Neutral band is the no-op middle.
+  const owner = state.findPlayer(route.ownerId);
+  if (owner) lf *= moraleLoadFactorMult(owner.morale);
+  lf = Math.min(1, lf);
   const passengers = Math.floor(plane.model.seats * lf);
   const revenue = passengers * route.ticketPrice;
   const fuel = fuelCost(plane, route.distanceKm);
