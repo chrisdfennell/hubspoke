@@ -9,6 +9,31 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-13 (fix) — Music pauses with the game on tab switch
+
+**Reported bug**: "If you switch tabs or screens, the music plays but the
+game pauses."
+
+**Cause**: Phaser auto-pauses its game loop when `document.hidden` becomes
+true (i.e., the browser tab is in the background or the OS window is
+minimized). The Clock tick comes from Phaser's loop, so simulation
+correctly stops. But music uses the Web Audio API directly with
+`setTimeout`-scheduled chord/melody notes — the browser only *throttles*
+those timers in background tabs, doesn't stop them. Already-scheduled
+oscillators on the AudioContext kept playing on Web Audio's own clock.
+
+**Fix**: `SoundManager` constructor now hooks `document.visibilitychange`.
+
+- On `hidden`: halt music scheduling AND `ctx.suspend()` the AudioContext
+  so any in-flight oscillator tails go quiet cleanly.
+- On `visible`: `ctx.resume()` and restart the prior `desiredTrack` if
+  one was playing.
+
+`desiredTrack` is preserved across the suspend so we restart on the
+same track the player was hearing before they switched tabs.
+
+---
+
 ## 2026-05-13 (balance) — Short-haul yield lift
 
 **Reported complaint**: "$300/flight starting out in HNL feels punishingly
