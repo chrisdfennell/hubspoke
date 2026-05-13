@@ -196,9 +196,10 @@ export function declineSponsor(sponsorId: string): boolean {
 }
 
 /** Called from Flights.landArrivedPlanes for every successful arrival.
- *  Increments progress on every matching active sponsor. */
+ *  Increments progress on every matching active sponsor (AI or human —
+ *  AI rivals can now accept sponsors too, so their arrivals tally
+ *  toward their own contracts). */
 export function trackArrival(player: Player, route: Route, passengers: number): void {
-  if (player.isAI) return;   // sponsors are human-only
   const state = GameState.get();
   for (const s of state.sponsorActive) {
     if (s.ownerId !== player.id) continue;

@@ -9,6 +9,69 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-13 (phase 5) — Smarter AI: sponsors, lounge, loans
+
+Three player-only mechanics opened to AI participation. The symmetry
+theme that's been the through-line of today's AI work is now complete:
+every system AI rivals can touch, they do.
+
+### AI accepts sponsor contracts
+
+`Sponsors.trackArrival` used to early-return on AI (`if (player.isAI)
+return`). The gate is gone — every arrival now ticks any matching
+active sponsor regardless of owner.
+
+New `aiAcceptSponsors`:
+- Checks each available offer against the AI's reachable cities (hubs
+  + every route endpoint).
+- Skips offers with < 5 days lead time (too tight to plausibly fill).
+- Caps at 3 active per AI (same MAX_ACTIVE the human respects).
+- One acceptance per day so the AI doesn't sweep the offer board.
+
+Net effect: if you're slow to grab a sponsor offer that lines up with
+an AI rival's network, expect the AI to grab it first.
+
+### AI visits VIP Lounge contacts
+
+`visitContact` was open to any player, but no AI code path ever
+called it. New `aiVisitLounge` picks situational contacts that solve
+a real problem:
+
+| Trigger | Contact | Min cash |
+|---|---|---|
+| Fleet avg condition < 0.5 | Maintenance Inspector | $1.2M |
+| Reputation < 60 | Press Baron | $1.0M |
+| Reputation < 70 | Marketing Guru | $400K |
+| Fuel price > $0.95 | Commodities Trader | $400K |
+
+Daily roll at `aiBuyChance × 0.25` — Lounge visits are luxuries, not
+routine. AI lounge visits silently consume the shared
+`state.loungeContacts` pool, same one the human shops from. (News
+push is suppressed for AI visits so the ticker isn't flooded.)
+
+### AI takes & repays loans
+
+`Bank.applyMonthlyLoanPayment` was wired only for `state.human` and
+the creditor-seize cascade was gated behind `!p.isAI`. Both fixed:
+
+- Monthly principal payment now runs for **every active player** on
+  day 1 of each month.
+- The 3-strike creditor-seize **also fires for AI** (with a news
+  announcement: "★ Creditors have seized {airline} after 3 missed
+  loan payments."). It's possible to outlast a struggling rival.
+
+New `aiManageLoans` (AI side):
+- **Borrow**: cash < $2M AND no current loan → take min($5M, credit
+  room) for liquidity.
+- **Repay**: cash > 2× loan AND cash > $5M → repay min(loan, cash ×
+  25%) per day until cleared.
+
+The cash-flow asymmetry that used to favor AI (they had no required
+loan principal, no creditor risk) is gone — they can win or lose by
+loan management just like the human.
+
+---
+
 ## 2026-05-13 (phase 4) — Smarter AI: leader targeting, defense, yield pricing
 
 Four behaviors that make AI rivals feel like they're actually paying

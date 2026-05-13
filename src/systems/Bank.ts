@@ -162,8 +162,15 @@ export function applyMonthlyLoanPayment(p: Player): void {
     );
   }
 
-  if (p.missedLoanPayments >= 3 && !p.isAI) {
+  if (p.missedLoanPayments >= 3) {
+    // Symmetric for AI now that AIs also take loans — three consecutive
+    // missed payments and creditors seize the airline regardless of who
+    // owns it. Routes through the same takenOverBy mechanism the human's
+    // game-over flow already handles.
     state.takenOverBy[p.id] = '_creditors_';
+    if (p.isAI) {
+      state.pushNews(`★ Creditors have seized ${p.name} after 3 missed loan payments.`);
+    }
   }
 }
 
@@ -221,12 +228,17 @@ export function registerBankHooks() {
     applyDailyInterest();
     // First day of a new month — the day-listener fires AFTER the month
     // rolled over, so date.day === 1 at this point exactly when a month
-    // just ended.
+    // just ended. Applies to every active player so AI rivals also have
+    // to service their loans (and can be creditor-seized if they don't).
     if (state.date.day === 1) {
-      applyMonthlyLoanPayment(state.human);
+      for (const p of state.players) {
+        if (state.takenOverBy[p.id]) continue;
+        applyMonthlyLoanPayment(p);
+      }
     }
     // Auto-rules run last so the post-everything cash position is what
-    // the thresholds compare against.
+    // the thresholds compare against. Human-only — AI loan management
+    // is in AI.aiManageLoans rather than auto-rules.
     applyAutoBank(state.human);
   });
 }

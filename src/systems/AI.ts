@@ -18,6 +18,9 @@ import { crewUtilization } from './Personnel';
 import { setDividend } from './Stocks';
 import { sellPlane } from './UsedMarket';
 import { netWorth } from './Milestones';
+import { acceptSponsor } from './Sponsors';
+import { visitContact } from './Lounge';
+import { takeLoan, repayLoan, creditLimit } from './Bank';
 
 /**
  * Daily AI turn — each rival follows the same constraints the human does
@@ -110,6 +113,19 @@ export function aiDailyTurn() {
     // back to itself, or surplus planes that aren't earning. The plane
     // lands on the same used market the human shops.
     aiManageFleet(player);
+
+    // Sponsor acceptance — passenger-count contracts on routes the AI
+    // already flies. Pay out cash + reputation when filled.
+    aiAcceptSponsors(player);
+
+    // VIP Lounge contacts — situational buys (rep rescue, fleet refit,
+    // fuel hedge) when the contact's effect matches a real AI problem.
+    aiVisitLounge(player);
+
+    // Loan management — borrow when liquidity-stressed, repay when
+    // flush. Symmetric with the existing monthly-principal hook which
+    // now charges AI rivals just like the human.
+    aiManageLoans(player);
   }
 }
 
@@ -694,6 +710,94 @@ function aiBuyDefense(player: Player) {
     player.cash -= item.price;
     player.inventory[item.id] = (player.inventory[item.id] ?? 0) + 1;
     return; // one defense buy per day
+  }
+}
+
+/**
+ * Consider available sponsor offers — accept any that target a city
+ * the AI already reaches (one of their hubs or a destination they fly
+ * to) and that has enough lead time to plausibly complete. Caps at 3
+ * active per AI to match the per-player MAX_ACTIVE in Sponsors.ts.
+ * One acceptance per day so the AI doesn't sweep the board.
+ */
+function aiAcceptSponsors(player: Player) {
+  const state = GameState.get();
+  const myActive = state.sponsorActive.filter(s => s.ownerId === player.id).length;
+  if (myActive >= 3) return;
+
+  const today = dateToDay(state.date);
+  // Build a set of cities the AI reaches (hubs + every route endpoint).
+  const reachable = new Set<string>(player.hubs);
+  for (const r of player.routes) {
+    reachable.add(r.fromCity);
+    reachable.add(r.toCity);
+  }
+
+  for (const offer of [...state.sponsorOffers]) {
+    if (offer.status !== 'available') continue;
+    if (!reachable.has(offer.toCity)) continue;
+    // Need at least 5 days of lead time after acceptance to bother.
+    const daysLeft = offer.deadlineDay - today;
+    if (daysLeft < 5) continue;
+    if (acceptSponsor(player, offer.id)) return; // one per day
+  }
+}
+
+/**
+ * Visit a Lounge contact when there's a real, matched problem for the
+ * AI to solve. Pulls from the same shared `state.loungeContacts` pool
+ * the human shops — popular contacts can disappear before the human
+ * sees them. Rolls at a low rate (aiBuyChance × 0.25) so the AI
+ * doesn't sweep the lounge every day.
+ */
+function aiVisitLounge(player: Player) {
+  const state = GameState.get();
+  const cfg = getDifficulty(state.difficulty);
+  if (Math.random() >= cfg.aiBuyChance * 0.25) return;
+  if (state.loungeContacts.length === 0) return;
+
+  // Compute the matched problems the AI is willing to spend a Lounge
+  // fee to solve. Order matters — earlier entries are tried first.
+  const fleetAvgCond = player.planes.length > 0
+    ? player.planes.reduce((s, p) => s + p.condition, 0) / player.planes.length
+    : 1.0;
+  const wants: Array<{ kind: string; minCash: number }> = [];
+  if (fleetAvgCond < 0.5) wants.push({ kind: 'maintenance-inspector', minCash: 1_200_000 });
+  if (player.reputation < 60) wants.push({ kind: 'press-baron', minCash: 1_000_000 });
+  if (player.reputation < 70) wants.push({ kind: 'marketing-guru', minCash: 400_000 });
+  if (getFuelPrice() > 0.95) wants.push({ kind: 'fuel-trader', minCash: 400_000 });
+
+  for (const want of wants) {
+    const contact = state.loungeContacts.find(c =>
+      c.kind === want.kind && player.reputation >= c.minRep && player.cash >= want.minCash,
+    );
+    if (!contact) continue;
+    visitContact(player, contact.id);
+    return; // one visit per day
+  }
+}
+
+/**
+ * Symmetric loan management for AI rivals. Two paths:
+ *  - **Borrow**: cash is tight (< $2M) AND credit limit has headroom.
+ *    Take a $5M loan (capped to remaining credit room) so monthly
+ *    payroll + fuel doesn't bottom out the bank account.
+ *  - **Repay**: cash comfortable enough that the AI carries 2× its
+ *    loan principal — bleed the loan down to free up future credit
+ *    and stop interest hemorrhage. Caps each daily repayment at 1/4
+ *    of cash so a windfall doesn't strip operating reserves.
+ */
+function aiManageLoans(player: Player) {
+  if (player.cash < 2_000_000 && player.loan === 0) {
+    const room = creditLimit(player) - player.loan;
+    if (room > 1_000_000) {
+      takeLoan(player, Math.min(5_000_000, room));
+    }
+    return;
+  }
+  if (player.loan > 0 && player.cash > player.loan * 2 && player.cash > 5_000_000) {
+    const repay = Math.min(player.loan, Math.floor(player.cash * 0.25));
+    if (repay > 0) repayLoan(player, repay);
   }
 }
 

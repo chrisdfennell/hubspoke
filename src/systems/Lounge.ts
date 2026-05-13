@@ -201,7 +201,12 @@ export function visitContact(player: Player, contactId: string): { ok: true; sum
   player.cash -= c.fee;
   const summary = bp.apply(player);
   state.loungeContacts.splice(idx, 1);
-  state.pushNews(`Met ${c.name} (${c.role}) — ${summary}`);
+  // Only the human gets a news entry on their own lounge visits — AI
+  // rivals visit contacts too, but flooding the ticker with every AI
+  // marketing/maintenance buy would drown out everything else.
+  if (!player.isAI) {
+    state.pushNews(`Met ${c.name} (${c.role}) — ${summary}`);
+  }
   return { ok: true, summary };
 }
 
