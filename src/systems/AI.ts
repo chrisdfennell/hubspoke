@@ -3,7 +3,7 @@ import { Player } from '../state/Player';
 import { Plane } from '../state/Plane';
 import { Route } from '../state/Route';
 import { CITIES, distanceKm, getCity, PLANE_MODELS, getPlaneModel } from '../state/catalog';
-import { suggestedTicketPrice, getFuelPrice } from './Economy';
+import { suggestedTicketPrice, getFuelPrice, expectedLoadFactor } from './Economy';
 import { buyShares, sellShares, fundamentalValue, getFloat } from './Stocks';
 import { getDifficulty } from '../state/Difficulty';
 import { getCEO } from '../state/ceos';
@@ -17,6 +17,7 @@ import { dateToDay } from '../state/demandModifiers';
 import { crewUtilization } from './Personnel';
 import { setDividend } from './Stocks';
 import { sellPlane } from './UsedMarket';
+import { netWorth } from './Milestones';
 
 /**
  * Daily AI turn — each rival follows the same constraints the human does
@@ -96,6 +97,11 @@ export function aiDailyTurn() {
     // the human respects in the Duty Free room.
     aiUseBoosts(player);
 
+    // Defense purchases — proactively buy a CCTV / K-9 / cyber shield
+    // when undefended and flush. Mirrors what a savvy human does after
+    // getting hit by a sabotage attempt.
+    aiBuyDefense(player);
+
     // Dividend declaration — cash-rich, well-regarded AIs return capital
     // to shareholders (which can include the human if they bought shares).
     aiManageDividends(player);
@@ -122,9 +128,16 @@ function aiRepairFleet(player: Player) {
   }
 }
 
-/** Drop each route's ticket price toward the cheapest rival on the same
- *  city pair, one $5 step per day. Floor at 60% of fair price so a price
- *  war can't crater margins below sustainability. */
+/**
+ * Two-way price management:
+ *  - If we're being undercut, step $5 down toward the cheapest rival
+ *    on the same pair (floor at 60% of fair).
+ *  - If we're already cheapest (or uncontested) AND expected load
+ *    factor is >85%, step $5 UP toward yield-maximum (ceiling at 1.5×
+ *    fair). This is the new bit — AI rivals never reached for yield
+ *    before, leaving meaningful revenue on the table on the routes
+ *    where they had monopoly pricing power.
+ */
 function aiRebalancePrices(player: Player) {
   const state = GameState.get();
   for (const route of player.routes) {
@@ -132,6 +145,7 @@ function aiRebalancePrices(player: Player) {
     const b = getCity(route.toCity);
     const fair = suggestedTicketPrice(route.distanceKm, a.demand, b.demand);
     const floor = Math.max(50, Math.round(fair * 0.6 / 5) * 5);
+    const ceiling = Math.round(fair * 1.5 / 5) * 5;
 
     // Cheapest other-airline route on the same pair.
     let cheapest: number | null = null;
@@ -145,13 +159,21 @@ function aiRebalancePrices(player: Player) {
         if (cheapest === null || r.ticketPrice < cheapest) cheapest = r.ticketPrice;
       }
     }
-    if (cheapest === null) continue;
 
-    // If we're already at or below the rival, leave it.
-    if (route.ticketPrice <= cheapest) continue;
-    // Step one tick down toward cheapest, respecting the floor.
-    const next = Math.max(floor, route.ticketPrice - 5);
-    if (next < route.ticketPrice) route.ticketPrice = next;
+    // Undercut path: someone cheaper than us — step $5 down toward them.
+    if (cheapest !== null && route.ticketPrice > cheapest) {
+      const next = Math.max(floor, route.ticketPrice - 5);
+      if (next < route.ticketPrice) route.ticketPrice = next;
+      continue;
+    }
+
+    // Yield-management path: no undercut to react to — see if there's
+    // headroom to push prices up. If LF is sustained over 85% we're
+    // leaving money on the table.
+    const lf = expectedLoadFactor(route);
+    if (lf > 0.85 && route.ticketPrice < ceiling) {
+      route.ticketPrice = Math.min(ceiling, route.ticketPrice + 5);
+    }
   }
 }
 
@@ -265,6 +287,16 @@ function aiTradeStocks(player: Player) {
   const targets = state.players.filter(p => p.id !== player.id && !state.takenOverBy[p.id]);
   if (targets.length === 0) return;
 
+  // Identify the run leader (highest net worth among non-self) so we can
+  // bias the score toward them. The more dominant the leader, the
+  // stronger the "gang up on them" pressure becomes.
+  const leader = [...targets].sort((a, b) => netWorth(b) - netWorth(a))[0];
+  const leaderNW = leader ? netWorth(leader) : 0;
+  const myNW = netWorth(player);
+  // Lead margin (0..1+): how much further ahead the leader is than the AI.
+  // Caps the bonus so a mild lead doesn't dominate the score.
+  const leadMargin = leaderNW > 0 ? Math.min(1, (leaderNW - myNW) / Math.max(leaderNW, 1)) : 0;
+
   // Score each: low rep + price below fundamental + already partial ownership = juicy.
   let best: Player | null = null;
   let bestScore = -Infinity;
@@ -278,7 +310,9 @@ function aiTradeStocks(player: Player) {
     const momentum = ownedFrac < 0.5 ? ownedFrac * 1.5 : 0;
     // Annualized dividend yield boost — 4 payments/year × per-share / price.
     const divYield = price > 0 ? (t.dividendPerShare * 4) / price : 0;
-    const score = undervalue * 0.6 + vulnerable * 0.4 + momentum + divYield * 0.8;
+    // Run-leader bonus: targeting the leader gets a hostile-takeover lean.
+    const leaderBonus = leader && t.id === leader.id ? leadMargin * 0.5 : 0;
+    const score = undervalue * 0.6 + vulnerable * 0.4 + momentum + divYield * 0.8 + leaderBonus;
     if (score > bestScore) { bestScore = score; best = t; }
   }
   if (!best) return;
@@ -622,6 +656,44 @@ function aiManageFleet(player: Player) {
       state.pushNews(`${player.name} sold ${plane.name} (${model.name}) onto the used market.`);
       return; // one trade per day
     }
+  }
+}
+
+/**
+ * Defense buying for AI rivals: top up to one of each defense item
+ * when cash allows AND the AI isn't already covered for that slot.
+ * Difficulty gates spending — Easy AIs barely bother, Brutal AIs
+ * keep a full kit at all times. Pulls from the same ITEMS catalog
+ * the human shops from.
+ */
+function aiBuyDefense(player: Player) {
+  const state = GameState.get();
+  const cfg = getDifficulty(state.difficulty);
+  // Even Brutal AIs only roll for defense at half their buy chance —
+  // sabotage in the headlines is the strongest signal to defend, and
+  // we want AIs that have been hit to react more than ones that haven't.
+  let defenseChance = cfg.aiBuyChance * 0.5;
+  // If this AI was the target of a recent sabotage attempt in the last
+  // few events, double the chance — they just got a wake-up call.
+  const recentSabotage = state.gameEvents.slice(0, 8).some(e =>
+    e.headline.toLowerCase().includes('sabotage') ||
+    e.headline.toLowerCase().includes('saboteur')
+  );
+  if (recentSabotage) defenseChance = Math.min(0.7, defenseChance * 2);
+  if (Math.random() >= defenseChance) return;
+
+  // Pick the cheapest defense item the AI is missing AND can afford
+  // with a 2× cash buffer. Order by ascending defenseRating so we
+  // fill out the cheap slots before reaching for cyber-shield.
+  const defenseItems = ITEMS
+    .filter(i => i.category === 'defense')
+    .sort((a, b) => (a.defenseRating ?? 0) - (b.defenseRating ?? 0));
+  for (const item of defenseItems) {
+    if ((player.inventory[item.id] ?? 0) > 0) continue;
+    if (player.cash < item.price * 2) continue;
+    player.cash -= item.price;
+    player.inventory[item.id] = (player.inventory[item.id] ?? 0) + 1;
+    return; // one defense buy per day
   }
 }
 

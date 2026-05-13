@@ -5,6 +5,7 @@ import { ITEMS, getItem, Item } from '../state/items';
 import { applyDemandMod } from '../state/demandModifiers';
 import { getCity } from '../state/catalog';
 import { getDifficulty } from '../state/Difficulty';
+import { netWorth } from './Milestones';
 import { clock } from './Clock';
 
 function dateToMinutes(d: GameDate): number {
@@ -190,9 +191,10 @@ export function aiDailySabotage() {
     if (Math.random() > cfg.aiSabotageChance) continue;
     const targets = state.players.filter(p => p.id !== ai.id && !state.takenOverBy[p.id]);
     if (targets.length === 0) continue;
-    // Bias toward whoever's ahead on cash — the more they're leading the
-    // pack, the more attractive a sabotage target they make.
-    const target = [...targets].sort((a, b) => b.cash - a.cash)[0];
+    // Target the actual run leader by net worth (cash + savings + 0.4×fleet
+    // + holdings − loan), not just cash on hand. A rival with $5M cash but
+    // a $200M fleet is more dominant than one with $20M cash and one plane.
+    const target = [...targets].sort((a, b) => netWorth(b) - netWorth(a))[0];
 
     // Buy whichever sabotage item the AI can afford. Bigger cash war chest
     // = heavier item, so a flush rival can drop an incendiary on you.

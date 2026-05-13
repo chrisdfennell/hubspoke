@@ -9,6 +9,62 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-13 (phase 4) — Smarter AI: leader targeting, defense, yield pricing
+
+Four behaviors that make AI rivals feel like they're actually paying
+attention to who's winning and what they can charge.
+
+### Run-leader targeting (sabotage + stocks)
+
+**Sabotage**: AIs were targeting whoever had the highest *cash* —
+which rewarded leading-the-pack players who'd just sold a fleet but
+ignored the actual run leader sitting on $200M of planes + $50M cash.
+Target picker now uses `netWorth()` (cash + savings + 0.4×fleet +
+holdings − loan) so the dominant player gets pressure regardless of
+their cash position.
+
+**Stocks**: `aiTradeStocks` value-buy score gets a `leaderBonus` term:
+
+```
+leadMargin = clamp((leaderNW − myNW) / leaderNW, 0, 1)
+score += (target is leader ? leadMargin * 0.5 : 0)
+```
+
+The bigger the lead, the more AIs gang up on the leader's stock —
+which (combined with the existing 25%/40% takeover alerts) means
+sustained dominance comes with a real hostile-takeover threat.
+
+### AI buys defense items
+
+`aiBuyDefense` runs each daily turn — rolls at `aiBuyChance × 0.5`
+baseline, **doubled to up to 70%** when there's recent sabotage news
+in the last 8 events (the AI just got woken up). Picks the cheapest
+defense item the AI doesn't already own with a 2× cash buffer:
+**CCTV → K-9 → Cyber Shield**. The chain matches the human's natural
+defensive buy order.
+
+Net effect: by mid-game, expect AI rivals to be partially or fully
+defended. Your sabotage attempts against them will more often be
+blocked + detected (rep hit on the attacker).
+
+### Yield-management pricing
+
+`aiRebalancePrices` was one-way (only stepped DOWN toward an undercut
+rival, never up). Now two-way:
+
+- **Down**: same as before — step $5/day toward the cheapest rival,
+  floor at 60% of fair.
+- **Up (new)**: when AI is already cheapest (or uncontested) AND
+  expected load factor is >85%, step $5/day UP toward a ceiling of
+  1.5× fair. Captures yield on monopoly routes where the AI used to
+  leave money on the table.
+
+The ceiling at 1.5× fair means even maxed-out AI pricing stays
+roughly competitive — no $9999 tickets — but the AI now extracts
+meaningful premium on routes where they've got pricing power.
+
+---
+
 ## 2026-05-13 (phase 3) — Smarter AI: crew rotation, dividends, fleet pruning
 
 Three behaviors that close loops left open by today's earlier work
