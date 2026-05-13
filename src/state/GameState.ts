@@ -7,6 +7,7 @@ import { getFuelPrice, setFuelPrice } from '../systems/Economy';
 import { GameEvent } from '../systems/Events';
 import { snapshotModifiers, restoreModifiers } from './demandModifiers';
 import { CargoContract, getContractCounter, setContractCounter } from '../systems/Cargo';
+import { UsedPlaneListing, getUsedListingCounter, setUsedListingCounter } from '../systems/UsedMarket';
 import { SponsorContract } from './Sponsor';
 import { Contact, getLoungeCounter, setLoungeCounter } from '../systems/Lounge';
 import { Difficulty, getDifficulty } from './Difficulty';
@@ -135,6 +136,10 @@ export interface GameSnapshot {
    *  pair, keyed by "${targetId}|${acquirerId}". Prevents the news ticker
    *  from re-firing every day while ownership sits in a tier. */
   takeoverAlerts?: Record<string, number>;
+  /** Used-plane market listings (player trade-ins + synthetic refresh). */
+  usedPlanes?: UsedPlaneListing[];
+  /** Counter so freshly-minted listings don't collide on load. */
+  usedListingCounter?: number;
   /** Recent random events (newest first). */
   gameEvents: GameEvent[];
   /** Active per-city demand modifiers. */
@@ -196,6 +201,9 @@ export class GameState {
   /** Highest tier (25 / 40) of a takeover early-warning already announced
    *  for each (target, acquirer) pair. Key = "${targetId}|${acquirerId}". */
   takeoverAlerts: Record<string, number> = {};
+  /** Used-plane market: listings available to buy (both player trade-ins
+   *  and synthetic refresh entries). Bounded by the daily refresh hook. */
+  usedPlanes: UsedPlaneListing[] = [];
   /** Structured events log. Newest first. */
   gameEvents: GameEvent[] = [];
   /** Map of (acquired airline id → acquirer airline id) once a takeover happens. */
@@ -274,6 +282,8 @@ export class GameState {
       if (s.sharesOutstanding[id] === undefined) s.sharesOutstanding[id] = 1_000_000;
     }
     s.takeoverAlerts = { ...(snap.takeoverAlerts ?? {}) };
+    s.usedPlanes = snap.usedPlanes ?? [];
+    if (typeof snap.usedListingCounter === 'number') setUsedListingCounter(snap.usedListingCounter);
     s.gameEvents = snap.gameEvents ?? [];
     s.takenOverBy = snap.takenOverBy ?? {};
     s.cargoOffers = snap.cargoOffers ?? [];
@@ -313,6 +323,8 @@ export class GameState {
       stockPrices: { ...this.stockPrices },
       sharesOutstanding: { ...this.sharesOutstanding },
       takeoverAlerts: { ...this.takeoverAlerts },
+      usedPlanes: this.usedPlanes,
+      usedListingCounter: getUsedListingCounter(),
       gameEvents: this.gameEvents,
       demandModifiers: snapshotModifiers(),
       takenOverBy: { ...this.takenOverBy },

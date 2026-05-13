@@ -9,6 +9,68 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-13 (even later) — Used-plane market
+
+Workshop got the back-half it was missing. Until now the only fleet
+operations were "buy new" and "repair" — old planes with low
+condition were dead capital you couldn't recover. New `Sell` button
+per plane and a `Used market` section that sits between the new-plane
+list and your fleet.
+
+### Selling
+
+Each fleet row gets a `Sell ${price}` button (disabled with "Busy"
+when the plane is mid-flight, ferrying, or in maintenance).
+Confirmation modal warns about lost upgrades on sale. Sale price:
+
+```
+sellPrice = model.price × max(condition, 0.1) × 0.6
+```
+
+The `max(condition, 0.1)` floor means even a near-dead plane recovers
+some scrap value — selling a 5%-condition Cessna isn't worse than
+keeping it. Upgrades (livery / interior / entertainment) drop on
+sale; the buyer gets a stripped airframe.
+
+### Buying used
+
+Each listing shows: silhouette, model, condition %, source label
+(`ex-${SellerName}` for player trade-ins or `market` for synthetic),
+asking price, and days left before the listing expires (red ≤5
+days). Ask price:
+
+```
+askPrice = model.price × condition × 0.75
+```
+
+There's a deliberate **15-point spread** between sell (0.6×) and buy
+(0.75×) multipliers — you can't arbitrage by flipping. The buyer
+covers any repair cost from the listed condition back to pristine,
+on the standard Workshop formula.
+
+Big-purchase guardrail (≥$50M) still applies — used 747s with their
+~$130M ask still trigger the confirm modal, with the modal showing
+both the ask and the expected repair-to-100% cost.
+
+### Market refresh
+
+- Daily hook tops the market up to **6 listings**, expiring anything
+  older than **30 days**. Refreshed at boot too, so day 1 has stock.
+- Synthetic listings get random model + 0.4..0.75 condition — chunky
+  but recoverable, never near-pristine (would undercut the new-plane
+  buy table).
+- Player trade-ins go into the same pool with `ex-${seller}` labels,
+  so the human's old planes do show up for AI rivals to grab if they
+  shopped — currently AI doesn't shop used, but the supply path is
+  ready when that's wired.
+
+**Wire format**: New `state.usedPlanes: UsedPlaneListing[]` +
+`usedListingCounter` persisted in the snapshot. Pre-feature saves
+load with `usedPlanes = []` and get topped up on the next daily
+tick.
+
+---
+
 ## 2026-05-13 (later) — Dividends, takeover alerts, AI sells shares
 
 Closing the IPO arc that landed earlier today. The buy/sell loop is

@@ -12,6 +12,8 @@ import { getCEO } from '../../state/ceos';
 import { UPGRADES, UpgradeCategory, getUpgrade } from '../../state/upgrades';
 import { makePlaneIcon } from '../../ui/PlaneIcon';
 import { liveryAccent } from '../../state/upgrades';
+import { sellPlane, buyUsedPlane, sellPriceFor, UsedPlaneListing, LISTING_DAYS } from '../../systems/UsedMarket';
+import { dateToDay } from '../../state/demandModifiers';
 
 /** Threshold above which buying a plane prompts a confirmation modal —
  *  a B747 / A380 misclick is real money down the drain otherwise. */
@@ -129,8 +131,33 @@ export class WorkshopScene extends RoomScene {
       y += 36;
     }
 
+    // ===== Used-plane market =============================================
+    y += 16;
+    this.addText(left, y, 'Used market', 16, COLORS.accentText);
+    this.addText(left + 130, y + 4,
+      `Listings expire after ${LISTING_DAYS} days. Buying a used plane adds it to your active hub — you cover repair.`,
+      11, COLORS.textDim);
+    y += 24;
+
+    if (state.usedPlanes.length === 0) {
+      this.addText(left, y, 'No used planes available right now. Check back tomorrow.', 13, COLORS.textDim);
+      y += 22;
+    } else {
+      this.addText(left + 50,  y, 'Model',     12, COLORS.textDim);
+      this.addText(left + 290, y, 'Condition', 12, COLORS.textDim);
+      this.addText(left + 390, y, 'Source',    12, COLORS.textDim);
+      this.addText(left + 510, y, 'Ask',       12, COLORS.textDim);
+      this.addText(left + 620, y, 'Listed',    12, COLORS.textDim);
+      y += 20;
+      const today = dateToDay(state.date);
+      for (const listing of state.usedPlanes) {
+        this.renderUsedRow(listing, left, y, me, today);
+        y += 30;
+      }
+    }
+
     // Fleet section: condition + (placeholder) repair button.
-    y += 12;
+    y += 16;
     this.addText(left, y, 'Your fleet', 16, COLORS.accentText);
     y += 24;
     if (me.planes.length === 0) {
@@ -188,9 +215,9 @@ export class WorkshopScene extends RoomScene {
 
       const renameBtn = new Button({
         scene: this,
-        x: left + 880,
+        x: left + 870,
         y: y + 14,
-        width: 90,
+        width: 80,
         height: 28,
         label: 'Rename',
         onClick: () => {
@@ -208,8 +235,102 @@ export class WorkshopScene extends RoomScene {
         },
       });
       this.content.add(renameBtn);
+
+      // Sell — only valid for idle planes. Mid-flight or in-maintenance
+      // gets greyed out with the same explanation as the Cargo dispatch.
+      const isIdle = plane.status.kind === 'idle';
+      const salePrice = sellPriceFor(plane);
+      const sellBtn = new Button({
+        scene: this,
+        x: left + 960,
+        y: y + 14,
+        width: 80,
+        height: 28,
+        label: isIdle ? `Sell ${formatMoney(salePrice)}` : 'Busy',
+        disabled: !isIdle,
+        onClick: () => {
+          if (!isIdle) return;
+          const lostUpgrades = Object.keys(plane.upgrades).length > 0;
+          const warningLine = lostUpgrades
+            ? '\nUpgrades on this plane will be lost.'
+            : '';
+          Modal.confirm(this, {
+            title: 'Sell plane',
+            message: `Sell ${plane.name} (${plane.model.name}, ${Math.round(plane.condition * 100)}% condition) for ${formatMoney(salePrice)}?${warningLine}`,
+            confirmLabel: 'Sell',
+            cancelLabel: 'Keep',
+            onConfirm: () => {
+              const result = sellPlane(me, plane.id);
+              if (result.ok) {
+                state.pushNews(`${me.name} sold ${plane.name} for ${formatMoney(result.price)}.`);
+                sound.play('buy');
+                this.rebuild();
+              }
+            },
+          });
+        },
+      });
+      this.content.add(sellBtn);
       y += 36;
     }
+  }
+
+  /** One row of the used-plane market — silhouette, condition bar,
+   *  source label, ask price, days listed, and a Buy button (disabled
+   *  if the player can't afford it). */
+  private renderUsedRow(listing: UsedPlaneListing, left: number, y: number, me: ReturnType<typeof GameState.get>['human'], today: number) {
+    const state = GameState.get();
+    const model = PLANE_MODELS.find(m => m.id === listing.modelId)!;
+    const daysListed = today - listing.listedOnDay;
+    const daysLeft = LISTING_DAYS - daysListed;
+    const dayColor = daysLeft <= 5 ? '#ff9aa6' : COLORS.textDim;
+
+    const icon = makePlaneIcon(this, left + 22, y + 14, model.seats, me.color, 0, model.cls, /* shadow */ false);
+    this.content.add(icon);
+
+    this.addText(left + 50,  y + 4, model.name, 13);
+    this.addText(left + 290, y + 4,
+      `${Math.round(listing.condition * 100)}%`,
+      13,
+      listing.condition < 0.5 ? '#ff9aa6' : '#caa46a',
+    );
+    this.addText(left + 390, y + 4, listing.sourceLabel, 12, COLORS.textDim);
+    this.addText(left + 510, y + 4, formatMoney(listing.askPrice), 13);
+    this.addText(left + 620, y + 4, `${daysLeft}d left`, 12, dayColor);
+
+    const canAfford = me.cash >= listing.askPrice;
+    const btn = new Button({
+      scene: this,
+      x: left + 760, y: y + 14, width: 110, height: 28,
+      label: canAfford ? 'Buy used' : 'Too expensive',
+      disabled: !canAfford,
+      onClick: () => {
+        if (!canAfford) return;
+        const doBuy = () => {
+          const result = buyUsedPlane(me, listing.id, state.activeHub);
+          if (result.ok) {
+            state.pushNews(`${me.name} bought a used ${model.name} for ${formatMoney(listing.askPrice)} (${Math.round(listing.condition * 100)}% condition).`);
+            state.stats.planesBought++;
+            sound.play('buy');
+            this.rebuild();
+          }
+        };
+        // Re-use the new-plane big-purchase guardrail so a $100M used 747
+        // misclick still asks before draining the bank.
+        if (listing.askPrice >= BIG_PURCHASE_THRESHOLD) {
+          Modal.confirm(this, {
+            title: 'Confirm used purchase',
+            message: `Buy used ${model.name} (${Math.round(listing.condition * 100)}% condition) for ${formatMoney(listing.askPrice)}?\nRepair cost to bring to full condition: ${formatMoney(Math.round((1 - listing.condition) * model.price * 0.01))}.`,
+            confirmLabel: 'Buy',
+            cancelLabel: 'Cancel',
+            onConfirm: doBuy,
+          });
+        } else {
+          doBuy();
+        }
+      },
+    });
+    this.content.add(btn);
   }
 
   /** Focused detail view for a single plane — three upgrade-category

@@ -9,6 +9,7 @@ import { registerBankHooks } from '../systems/Bank';
 import { registerPersonnelHooks } from '../systems/Personnel';
 import { registerEventHooks } from '../systems/Events';
 import { registerCargoHooks, refreshOffers } from '../systems/Cargo';
+import { registerUsedMarketHooks, refreshUsedMarket } from '../systems/UsedMarket';
 import { registerSabotageHooks } from '../systems/Sabotage';
 import { registerLoungeHooks, refreshContacts } from '../systems/Lounge';
 import { registerMilestoneHooks } from '../systems/Milestones';
@@ -44,6 +45,7 @@ export class BootScene extends Phaser.Scene {
     registerPersonnelHooks();
     registerEventHooks();
     registerCargoHooks();
+    registerUsedMarketHooks();
     registerSabotageHooks();
     registerLoungeHooks();
     registerMilestoneHooks();
@@ -588,6 +590,7 @@ export class BootScene extends Phaser.Scene {
     maybeAutoDismissForLoadedSave();
     refreshOffers();
     refreshContacts();
+    refreshUsedMarket();
     registerAutoSave();
     saveNow();
     // Kick the airport music here (we're in a user-gesture click handler,
