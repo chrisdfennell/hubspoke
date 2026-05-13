@@ -80,35 +80,23 @@ class SoundManager {
     this.muted = localStorage.getItem(MUTE_KEY) === '1';
     const v = parseFloat(localStorage.getItem('airline-tycoon-music-vol') ?? '');
     if (!Number.isNaN(v) && v >= 0 && v <= 1) this.musicVolume = v;
-
-    // Phaser auto-pauses its game loop when the browser tab is hidden, so the
-    // Clock tick stops — but the music runs on a separate AudioContext +
-    // setTimeout schedule, which the browser only throttles, not halts. The
-    // result was music continuing to play while the simulation was frozen.
-    // Hook visibilitychange to suspend audio cleanly and resume on return.
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', () => {
-        if (document.hidden) this.handleHidden();
-        else this.handleVisible();
-      });
-    }
   }
 
-  /** Tab/window lost visibility — halt music scheduling and suspend the
-   *  AudioContext so any oscillator tail stops cleanly. `desiredTrack`
-   *  is preserved so the right track resumes when the tab is visible
-   *  again. No-op if there's no audio context yet (the player hasn't
-   *  interacted to create one). */
-  private handleHidden() {
+  /** Halt music scheduling and suspend the AudioContext so any oscillator
+   *  tail goes quiet. `desiredTrack` is preserved so resumeMusic() can
+   *  start the right track back up. Called from main.ts when the tab
+   *  loses visibility AND the runInBackground setting is off. */
+  suspendMusic() {
     this.haltMusicScheduling();
     if (this.ctx && this.ctx.state === 'running') {
       this.ctx.suspend().catch(() => {});
     }
   }
 
-  /** Tab/window regained visibility — resume the AudioContext and
-   *  restart whatever music track was playing before, unless muted. */
-  private handleVisible() {
+  /** Resume the AudioContext and restart `desiredTrack` if one is set
+   *  and we're not muted. Idempotent — safe to call when the music
+   *  is already playing or no track was ever requested. */
+  resumeMusic() {
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
     }

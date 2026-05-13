@@ -146,6 +146,18 @@ export class SettingsScene extends RoomScene {
     });
     y += 56;
 
+    // -- Run in background --
+    this.addText(left, y, 'Run while tab is hidden', 14);
+    this.addText(left + 8, y + 22,
+      'Keep the world clock + music running when this tab loses focus. Off: tab away and everything pauses (browser default).',
+      11, COLORS.textDim);
+    this.addToggle(rightEdge, y + 8, settings.runInBackground, (next) => {
+      settings.runInBackground = next;
+      saveNow();
+      this.rebuild();
+    });
+    y += 56;
+
     // -- Show competitor prices in route tooltip --
     this.addText(left, y, 'Show competitor prices in route tooltip', 14);
     this.addText(left + 8, y + 22,

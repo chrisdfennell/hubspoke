@@ -9,28 +9,52 @@ gameplay reasoning behind the change.
 
 ---
 
-## 2026-05-13 (fix) — Music pauses with the game on tab switch
+## 2026-05-13 (toggle) — "Run while tab is hidden" setting
 
-**Reported bug**: "If you switch tabs or screens, the music plays but the
-game pauses."
+The earlier hidden-tab fix (auto-pausing music) was the wrong call —
+the user wanted the **opposite**: keep the whole game running, music
+and all, when the tab is in the background. Now it's a setting.
 
-**Cause**: Phaser auto-pauses its game loop when `document.hidden` becomes
-true (i.e., the browser tab is in the background or the OS window is
-minimized). The Clock tick comes from Phaser's loop, so simulation
-correctly stops. But music uses the Web Audio API directly with
-`setTimeout`-scheduled chord/melody notes — the browser only *throttles*
-those timers in background tabs, doesn't stop them. Already-scheduled
-oscillators on the AudioContext kept playing on Web Audio's own clock.
+### What the setting does
 
-**Fix**: `SoundManager` constructor now hooks `document.visibilitychange`.
+New `GameSettings.runInBackground: boolean` (default **off**):
 
-- On `hidden`: halt music scheduling AND `ctx.suspend()` the AudioContext
-  so any in-flight oscillator tails go quiet cleanly.
-- On `visible`: `ctx.resume()` and restart the prior `desiredTrack` if
-  one was playing.
+- **Off** (default, browser-standard): tab away → Phaser's auto-pause
+  freezes the simulation AND the music suspends. Returning re-wakes both
+  cleanly. This is what most browser games do; least surprising.
+- **On**: tab away → Phaser still tries to pause, but our HIDDEN handler
+  wakes the loop right back up. Music keeps playing. Useful if you want
+  to leave the game ticking in another tab.
 
-`desiredTrack` is preserved across the suspend so we restart on the
-same track the player was hearing before they switched tabs.
+### Plumbing
+
+- `fps.forceSetTimeOut: true` in the Phaser config so the loop uses
+  `setTimeout` instead of `requestAnimationFrame`. RAF stops dead in
+  hidden tabs; setTimeout is only throttled (to ~1Hz background-rate)
+  so the loop still ticks.
+- `main.ts` listens for `Phaser.Core.Events.HIDDEN` / `VISIBLE`. On
+  HIDDEN: if the setting is on, `game.loop.wake()`; otherwise
+  `sound.suspendMusic()`. On VISIBLE: wake the loop AND
+  `sound.resumeMusic()` (idempotent).
+- `Sound.ts` exposes `suspendMusic()` / `resumeMusic()` as public
+  methods. `desiredTrack` survives the suspend so the same track
+  resumes when the tab is visible again.
+
+### Background tick rate
+
+At browser-throttled ~1Hz the in-game clock will still advance —
+just slower in real-time. At 4× speed the ratio is roughly 4 in-game
+minutes per real second; at the throttled rate that's still meaningful
+progression while you're on another tab.
+
+---
+
+## 2026-05-13 (fix-superseded) — Music pauses with the game on tab switch
+
+Initial fix for the "music plays while game pauses" report — replaced
+by the toggle above. The visibility-handler logic is now wired through
+`main.ts` and gated on the `runInBackground` setting, so the previous
+unconditional auto-suspend is no longer present.
 
 ---
 

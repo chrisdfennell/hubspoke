@@ -56,6 +56,10 @@ export interface GameSettings {
    *  modal choice prompts (engine flag, pilots' raise, charter offer,
    *  etc.). Disable for a quieter run. */
   showInterventions: boolean;
+  /** When true, the game loop + music keep running while the browser
+   *  tab is hidden or in the background. Off (default) matches typical
+   *  browser-game behavior: tab away and the world pauses + music stops. */
+  runInBackground: boolean;
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -72,6 +76,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   showCompetitorPrices: true,
   showWeeklyPaper: true,
   showInterventions: true,
+  runInBackground: false,
 };
 
 /** Bump when a backwards-incompatible balance change ships. The migrator in
