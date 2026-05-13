@@ -55,6 +55,11 @@ export interface PlayerSnapshot {
   autoWithdrawBelowCash?: number;
   /** Consecutive missed monthly loan payments. Hits 3 → creditors seize. */
   missedLoanPayments?: number;
+  /** Per-share quarterly dividend this airline pays. 0 = no dividend. */
+  dividendPerShare?: number;
+  /** Game-day index of the most recent dividend payment. Next dividend
+   *  pays out 90 days after this. */
+  lastDividendDay?: number;
 }
 
 export class Player {
@@ -112,6 +117,14 @@ export class Player {
    *  successful payment; at 3, the airline is seized by creditors. */
   missedLoanPayments: number = 0;
 
+  /** Per-share quarterly dividend this airline pays to all shareholders.
+   *  Stocks.payDividends() drains issuer cash + credits holders every 90
+   *  in-game days. Zero (default) = no dividend. */
+  dividendPerShare: number = 0;
+  /** Game-day index of the last dividend payment. Set when the player
+   *  declares a dividend so the first payout is one full quarter out. */
+  lastDividendDay: number = 0;
+
   /** Number of apron gates available at the given hub. */
   gatesAt(hubId: string): number {
     return this.gateCounts[hubId] ?? STARTING_GATES;
@@ -154,6 +167,8 @@ export class Player {
       autoSaveAboveCash: this.autoSaveAboveCash,
       autoWithdrawBelowCash: this.autoWithdrawBelowCash,
       missedLoanPayments: this.missedLoanPayments,
+      dividendPerShare: this.dividendPerShare,
+      lastDividendDay: this.lastDividendDay,
     };
   }
 
@@ -180,6 +195,8 @@ export class Player {
     p.autoSaveAboveCash = s.autoSaveAboveCash ?? 0;
     p.autoWithdrawBelowCash = s.autoWithdrawBelowCash ?? 0;
     p.missedLoanPayments = s.missedLoanPayments ?? 0;
+    p.dividendPerShare = s.dividendPerShare ?? 0;
+    p.lastDividendDay = s.lastDividendDay ?? 0;
     return p;
   }
 }

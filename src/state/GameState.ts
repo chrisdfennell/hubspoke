@@ -127,6 +127,14 @@ export interface GameSnapshot {
   fuelPrice: number;
   /** Stock prices per airline at time of save. */
   stockPrices: Record<string, number>;
+  /** Total shares outstanding per airline. Grows on IPO, shrinks on
+   *  buyback. Optional for back-compat with pre-IPO saves — loadFrom
+   *  defaults missing entries to 1,000,000 (the legacy flat float). */
+  sharesOutstanding?: Record<string, number>;
+  /** Highest takeover-warning tier already announced per (target,acquirer)
+   *  pair, keyed by "${targetId}|${acquirerId}". Prevents the news ticker
+   *  from re-firing every day while ownership sits in a tier. */
+  takeoverAlerts?: Record<string, number>;
   /** Recent random events (newest first). */
   gameEvents: GameEvent[];
   /** Active per-city demand modifiers. */
@@ -181,6 +189,13 @@ export class GameState {
   news: { date: GameDate; text: string }[] = [];
   /** Current share price per airline id ($). */
   stockPrices: Record<string, number> = {};
+  /** Total shares outstanding per airline id. Each airline starts at 1M;
+   *  IPO mints new shares (issuer gets cash, count goes up), buybacks
+   *  retire shares (issuer pays cash, count goes down). */
+  sharesOutstanding: Record<string, number> = {};
+  /** Highest tier (25 / 40) of a takeover early-warning already announced
+   *  for each (target, acquirer) pair. Key = "${targetId}|${acquirerId}". */
+  takeoverAlerts: Record<string, number> = {};
   /** Structured events log. Newest first. */
   gameEvents: GameEvent[] = [];
   /** Map of (acquired airline id → acquirer airline id) once a takeover happens. */
@@ -252,6 +267,13 @@ export class GameState {
     s.players = snap.players.map(Player.fromJSON);
     s.news = snap.news;
     s.stockPrices = snap.stockPrices ?? {};
+    // Pre-IPO saves don't carry sharesOutstanding — backfill to 1M per
+    // known airline so the legacy fixed-float math stays consistent.
+    s.sharesOutstanding = { ...(snap.sharesOutstanding ?? {}) };
+    for (const id of Object.keys(s.stockPrices)) {
+      if (s.sharesOutstanding[id] === undefined) s.sharesOutstanding[id] = 1_000_000;
+    }
+    s.takeoverAlerts = { ...(snap.takeoverAlerts ?? {}) };
     s.gameEvents = snap.gameEvents ?? [];
     s.takenOverBy = snap.takenOverBy ?? {};
     s.cargoOffers = snap.cargoOffers ?? [];
@@ -289,6 +311,8 @@ export class GameState {
       news: this.news,
       fuelPrice: getFuelPrice(),
       stockPrices: { ...this.stockPrices },
+      sharesOutstanding: { ...this.sharesOutstanding },
+      takeoverAlerts: { ...this.takeoverAlerts },
       gameEvents: this.gameEvents,
       demandModifiers: snapshotModifiers(),
       takenOverBy: { ...this.takenOverBy },
@@ -364,9 +388,10 @@ export class GameState {
       player.mechanics = cfg.startMechanics;
     }
 
-    // Initial share prices.
+    // Initial share prices and float.
     for (const a of DEFAULT_AIRLINES) {
       this.stockPrices[a.id] = 50;
+      this.sharesOutstanding[a.id] = 1_000_000;
     }
 
     // Assign CEOs and apply starting-cash + starting-inventory perks. The

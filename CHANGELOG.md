@@ -9,6 +9,160 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-13 (later) — Dividends, takeover alerts, AI sells shares
+
+Closing the IPO arc that landed earlier today. The buy/sell loop is
+now two-sided, the hostile-takeover threat actually communicates
+itself, and dividends give shareholders (incl. AI) a reason to hold.
+
+### Quarterly dividends
+
+New row in the Stock Market treasury panel. Pick a per-share rate
+from `[Off, $0.10, $0.50, $1.00, $2.00]`. Every **90 in-game days**
+the dividend pays out:
+
+- **Cost to issuer**: `dividendPerShare × float`. At a 1M float and
+  $1.00/share that's $1M/quarter; at $2.00 with a post-IPO 1.25M
+  float, $2.5M/quarter — meaningful pressure on cash.
+- **Credit to holders**: each player credited `perShare × ownedShares`.
+  Public-float shares drain the issuer but don't credit anyone
+  (the "public" isn't tracked).
+- **Reputation bump**: `+1 + floor(perShare)` per payment — investor-
+  friendly behavior. Capped at 100.
+- **Skip-on-empty**: if the issuer can't cover the payment, the
+  payment is skipped, the dividend clock still resets (no infinite
+  catch-up debt), and the human eats a `-2` rep hit + news warning.
+
+**Why a recurring drain matters**: dividends pair with IPO. Mint
+shares to raise cash today, and the larger float makes every future
+dividend more expensive. There's now a real tradeoff between "issue
+to fund growth" and "issue and regret it next quarter."
+
+**AI prefers dividend stocks**: `aiTradeStocks` value score now adds
+`(annualYield × 0.8)`. A 4% yield is worth as much to an AI as a
+4-point undervaluation, so paying dividends actually attracts AI
+buyers — useful when you want AI to absorb your float instead of a
+specific takeover hunter.
+
+### Takeover early-warning news
+
+The buy logic was already hunting takeover targets — but a rival
+silently crossing 30%, 40%, 45% of your float gave you no signal
+until they hit the 50% takeover threshold. New `checkTakeoverAlerts`
+fires news entries at **25%** and **40%** ownership tiers per
+(target, acquirer) pair. Each tier announces at most once per pair
+per run; the alert state is cleared if the target is acquired.
+
+Headlines targeting the human are prefixed with `⚠` so they pop in
+the news ticker. AI-vs-AI ownership shows without the prefix.
+
+New `state.takeoverAlerts: Record<string, number>` (`"target|acquirer"`
+→ highest tier already announced) is persisted in the snapshot.
+
+### AI sells shares
+
+`aiTradeStocks` was buy-only — rival holdings accumulated forever
+without a counterweight. New sell pass at the top of each daily AI
+turn:
+
+- Skips any target it's actively trying to take over (`ownedFrac >
+  0.3`).
+- Sells if **price > 1.25 × fundamental** (overvalued exit), OR if
+  **cash < $500K** (forced rebalance for liquidity).
+- Trades cap at 25K shares/day or 25% of holdings, whichever is
+  smaller — prevents one AI dumping a million shares and tanking
+  the price overnight.
+
+This is what closes the loop: AI buys cheap, sells expensive,
+preserves takeover threats, and prices now move in both directions
+from rival activity.
+
+---
+
+## 2026-05-13 — IPO, buyback, freighter fleet, AI cargo
+
+Two long-standing "fully built but one-sided" systems got their
+missing halves wired in, plus a new fleet category that gives the
+cargo board something to actually shop for.
+
+### IPO + buyback (treasury actions for the human)
+
+Stocks were trade-only until now: you could buy rival shares but had
+no way to issue or retire your own. New IPO and buyback panel at the
+top of the Stock Market room:
+
+- **Issue shares (IPO)** — mint new shares of your airline at the
+  current market price. Cash lands in your account immediately; the
+  float grows by however many shares you printed. Capped at **25% of
+  current float per round** so a single click can't double the share
+  count. Dilution shows up the next day: with more shares chasing the
+  same equity, the per-share fundamental drifts down.
+- **Buy back shares** — retire shares from the public float at market
+  price. Costs cash, shrinks the float, nudges price up, and (the
+  reason you actually care) reduces the share pool any rival can use
+  to launch a hostile takeover.
+
+**Why it matters**: Loans are the only other fast-cash mechanic, and
+they hit a credit-limit ceiling early-mid game. IPO is the second
+lever — and it has different tradeoffs (no interest, but permanent
+ownership dilution). Buyback is a defensive tool once an AI rival
+starts accumulating your shares — `aiTradeStocks` has been hunting
+takeover targets for a few patches now, so this is the answer.
+
+**Wire format**: New `sharesOutstanding: Record<string, number>` on
+GameState, seeded to 1,000,000 per airline at bootstrap and
+persisted in the snapshot. Pre-IPO saves backfill the legacy
+1,000,000-per-airline default in `loadFrom`, so existing runs load
+without surprise.
+
+**Math under the hood** — fundamental price was `equity / 1_000_000 *
+repMod`; it's now `equity / float(id) * repMod`, with `float(id)`
+reading from the new state. `buyShares`/`sellShares` impact also
+scales by float fraction now, so highly-issued airlines absorb the
+same dollar order with less price movement (correct — that's what a
+deeper book actually does).
+
+### Freighter fleet (3 new planes)
+
+The cargo board has been pulling double duty as an excuse to fly
+your passenger fleet on dead-mile legs. Now there's purpose-built
+freight metal:
+
+- **ATR 72-600F** — $22M, 9,000 kg, 3,500 km. Regional freight
+  workhorse.
+- **Airbus A330-200F** — $220M, 70,000 kg, 7,400 km. Long-haul
+  mid-tier.
+- **Boeing 747-400F** — $280M, 113,000 kg, 8,200 km. The whale —
+  best $/kg of capacity in the catalog.
+
+All three have **`seats: 0`** so they're useless on passenger routes
+(zero revenue). The Workshop buy list now labels them "freighter" in
+gold instead of showing a seat count, and the per-model tooltip
+swaps `$ per seat` for `$ per kg of capacity` so the freighter
+economics actually compare. The PlaneIcon silhouette falls back to a
+class-appropriate display size when seats is 0, so a 747F renders at
+widebody scale instead of as a 4-pixel dot.
+
+### AI rivals work the cargo board
+
+The cargo offer pool was a single-player feature: only the human
+ever called `acceptContract`. Rivals now compete for the same
+contracts on every daily tick:
+
+- For each idle, range-and-capacity-capable plane in their fleet,
+  the AI scores available contracts by net-of-fuel margin.
+- Requires **≥35% margin after fuel** before accepting, capped at
+  **2 contracts/AI/day** so one rival can't sweep the whole board.
+- Accepts via `acceptContract` and immediately dispatches via
+  `dispatchCargo` — same call paths the player uses, so the AI pays
+  fuel upfront and lands the plane idle at the destination.
+
+This is the natural counterpart to `aiTradeStocks` (rivals already
+buy each other's shares) — the cargo board was the last big
+mechanic without AI participation.
+
+---
+
 ## 2026-05-12 — Save export / import (survive a localStorage wipe)
 
 Saves now live in two places: localStorage (as before) **and** any

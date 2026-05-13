@@ -160,6 +160,52 @@ export const PLANE_MODELS: PlaneModel[] = [
     conditionAtPurchase: 1.0,
     cls: 'widebody',
   },
+  // ----- Dedicated freighters. seats: 0 makes them useless on passenger
+  // routes (zero revenue), so the player only opens cargo contracts with
+  // them. Cargo capacity is what they're for — much higher than the
+  // passenger variants' belly-hold numbers. -----
+  {
+    id: 'atr-72f',
+    name: 'ATR 72-600F',
+    manufacturer: 'ATR',
+    price: 22_000_000,
+    seats: 0,
+    cargoCapacityKg: 9_000,
+    range: 3_500,
+    speed: 510,
+    fuelPerKm: 4.0,
+    maintenancePerHour: 95,
+    conditionAtPurchase: 1.0,
+    cls: 'turboprop',
+  },
+  {
+    id: 'a330-200f',
+    name: 'Airbus A330-200F',
+    manufacturer: 'Airbus',
+    price: 220_000_000,
+    seats: 0,
+    cargoCapacityKg: 70_000,
+    range: 7_400,
+    speed: 870,
+    fuelPerKm: 14.0,
+    maintenancePerHour: 470,
+    conditionAtPurchase: 1.0,
+    cls: 'widebody',
+  },
+  {
+    id: 'b747-400f',
+    name: 'Boeing 747-400F',
+    manufacturer: 'Boeing',
+    price: 280_000_000,
+    seats: 0,
+    cargoCapacityKg: 113_000,
+    range: 8_200,
+    speed: 920,
+    fuelPerKm: 22.0,
+    maintenancePerHour: 600,
+    conditionAtPurchase: 1.0,
+    cls: 'widebody',
+  },
 ];
 
 export interface CityData {

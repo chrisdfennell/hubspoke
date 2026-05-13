@@ -3,11 +3,12 @@ import { Player } from '../state/Player';
 import { Plane } from '../state/Plane';
 import { Route } from '../state/Route';
 import { CITIES, distanceKm, getCity, PLANE_MODELS, getPlaneModel } from '../state/catalog';
-import { suggestedTicketPrice } from './Economy';
-import { buyShares, fundamentalValue, FLOAT } from './Stocks';
+import { suggestedTicketPrice, getFuelPrice } from './Economy';
+import { buyShares, sellShares, fundamentalValue, getFloat } from './Stocks';
 import { getDifficulty } from '../state/Difficulty';
 import { getCEO } from '../state/ceos';
 import { clock } from './Clock';
+import { acceptContract, dispatchCargo } from './Cargo';
 
 /**
  * Daily AI turn — each rival follows the same constraints the human does
@@ -71,6 +72,10 @@ export function aiDailyTurn() {
     // (or the human if they look weak). Spend up to 8% of cash per turn on
     // value buys, or aggressive on a clear takeover target.
     aiTradeStocks(player);
+
+    // Cargo competition: with idle planes, grab profitable contracts off
+    // the same shared board the human shops from.
+    aiBidCargo(player);
   }
 }
 
@@ -192,6 +197,37 @@ function aiOpenRoute(player: Player) {
 
 function aiTradeStocks(player: Player) {
   const state = GameState.get();
+
+  // ---- Sell pass: rebalance holdings ---------------------------------
+  // Sell when (a) holdings are overvalued vs fundamental, OR (b) cash
+  // is critically low — but NEVER abandon a takeover path (ownedFrac
+  // already past 30% of a target's float).
+  for (const targetId of Object.keys(player.holdings)) {
+    const owned = player.holdings[targetId] ?? 0;
+    if (owned <= 0) continue;
+    const target = state.findPlayer(targetId);
+    if (!target) continue;
+    if (state.takenOverBy[targetId]) continue;
+    const price = state.stockPrices[targetId] ?? 0;
+    if (price <= 0) continue;
+    const fund = fundamentalValue(target);
+    const ownedFrac = owned / getFloat(targetId);
+
+    // Don't sell shares of a target we're actively trying to take over.
+    if (ownedFrac > 0.3) continue;
+
+    const overvalued = price > fund * 1.25;
+    const cashStrapped = player.cash < 500_000;
+    if (!overvalued && !cashStrapped) continue;
+
+    // Sell up to 25% of holdings at a time, capped at 25K shares per day
+    // so the AI doesn't crater a price by dumping a million shares.
+    const sellN = Math.min(owned, Math.max(Math.floor(owned * 0.25), cashStrapped ? owned : 0), 25_000);
+    if (sellN < 100) continue;
+    sellShares(player, targetId, sellN);
+  }
+
+  // ---- Buy pass: existing value-hunting logic -------------------------
   if (player.cash < 1_000_000) return; // need a war chest
 
   // Candidate targets: any other player who isn't already taken over.
@@ -204,18 +240,20 @@ function aiTradeStocks(player: Player) {
   for (const t of targets) {
     const price = state.stockPrices[t.id] ?? 50;
     const fund = fundamentalValue(t);
-    const ownedFrac = (player.holdings[t.id] ?? 0) / FLOAT;
+    const ownedFrac = (player.holdings[t.id] ?? 0) / getFloat(t.id);
     if (price <= 0) continue;
     const undervalue = (fund - price) / Math.max(price, 1);
     const vulnerable = (60 - t.reputation) / 60;
     const momentum = ownedFrac < 0.5 ? ownedFrac * 1.5 : 0;
-    const score = undervalue * 0.6 + vulnerable * 0.4 + momentum;
+    // Annualized dividend yield boost — 4 payments/year × per-share / price.
+    const divYield = price > 0 ? (t.dividendPerShare * 4) / price : 0;
+    const score = undervalue * 0.6 + vulnerable * 0.4 + momentum + divYield * 0.8;
     if (score > bestScore) { bestScore = score; best = t; }
   }
   if (!best) return;
 
   const price = state.stockPrices[best.id] ?? 50;
-  const ownedFrac = (player.holdings[best.id] ?? 0) / FLOAT;
+  const ownedFrac = (player.holdings[best.id] ?? 0) / getFloat(best.id);
   const cfg = getDifficulty(state.difficulty);
   // Aggressive if close to majority; otherwise modest. Difficulty scales budget.
   const cashBudget = (ownedFrac > 0.3 ? player.cash * 0.25 : player.cash * 0.05) * cfg.aiStockBudgetMult;
@@ -223,6 +261,55 @@ function aiTradeStocks(player: Player) {
   if (sharesToBuy < 100) return;
   const stepped = Math.min(sharesToBuy, 50_000);
   buyShares(player, best.id, stepped);
+}
+
+/**
+ * Look at the shared cargo board and pick contracts whose net-of-fuel
+ * profit clears a sane margin. Limited to two accept-and-dispatch
+ * actions per day so the AI doesn't sweep the entire board in one tick.
+ *
+ * Only matches contracts the AI can fly RIGHT NOW with an idle plane —
+ * skips anything requiring an unaffordable freighter purchase. The dispatch
+ * path already handles range / capacity gating; this just makes the AI a
+ * realistic competitor for the same pool of contracts the human shops.
+ */
+function aiBidCargo(player: Player) {
+  const state = GameState.get();
+  const fuel = getFuelPrice();
+  let accepted = 0;
+  const MAX_PER_DAY = 2;
+
+  for (const contract of [...state.cargoOffers]) {
+    if (accepted >= MAX_PER_DAY) break;
+    if (contract.status !== 'available') continue;
+
+    const from = getCity(contract.fromCity);
+    const to = getCity(contract.toCity);
+    const dist = distanceKm(from, to);
+
+    // Find an idle plane that can carry the load AND has the range.
+    // Prefer the most fuel-efficient match — best $/contract.
+    const eligible = player.planes.filter(p => {
+      if (p.status.kind !== 'idle') return false;
+      const m = getPlaneModel(p.modelId);
+      return m.cargoCapacityKg >= contract.weightKg && m.range >= dist;
+    }).sort((a, b) => getPlaneModel(a.modelId).fuelPerKm - getPlaneModel(b.modelId).fuelPerKm);
+
+    if (eligible.length === 0) continue;
+    const plane = eligible[0];
+    const here = getCity(plane.status.kind === 'idle' ? plane.status.airportId : player.hubs[0]);
+    const totalDist = distanceKm(here, from) + dist;
+    const fuelCost = totalDist * getPlaneModel(plane.modelId).fuelPerKm * fuel;
+    // Demand at least 35% margin after fuel — covers wear + opportunity cost.
+    if (contract.payment - fuelCost < contract.payment * 0.35) continue;
+    if (player.cash < fuelCost) continue;
+
+    if (!acceptContract(player, contract.id)) continue;
+    const result = dispatchCargo(player, contract.id, plane.id);
+    if (result.ok) {
+      accepted++;
+    }
+  }
 }
 
 export function registerAIHooks() {

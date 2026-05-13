@@ -70,7 +70,12 @@ export class WorkshopScene extends RoomScene {
       this.content.add(icon);
 
       const nameTxt   = this.addText(left + ICON_COL,       y + 6, m.name, 13);
-      const seatsTxt  = this.addText(left + ICON_COL + 240, y + 6, `${m.seats}`, 13);
+      const seatsTxt  = this.addText(
+        left + ICON_COL + 240, y + 6,
+        m.seats > 0 ? `${m.seats}` : 'freighter',
+        13,
+        m.seats > 0 ? COLORS.text : '#caa46a',
+      );
       const rangeTxt  = this.addText(left + ICON_COL + 310, y + 6, `${m.range} km`, 13);
       const speedTxt  = this.addText(left + ICON_COL + 400, y + 6, `${m.speed} km/h`, 13);
       const fuelTxt   = this.addText(left + ICON_COL + 490, y + 6, `${m.fuelPerKm.toFixed(1)} L`, 13);
@@ -343,15 +348,19 @@ export class WorkshopScene extends RoomScene {
   private modelTooltip(m: PlaneModel): string {
     const fuel = getFuelPrice();
     const fuelPerKm = m.fuelPerKm * fuel;          // $ per km
-    const dollarPerSeat = m.price / m.seats;
     // Round-trip fuel cost on a 1000 km route.
     const sample1000 = 2 * 1000 * m.fuelPerKm * fuel;
     // Daily maintenance bill (24h × per-hour).
     const dailyMaint = m.maintenancePerHour * 24;
+    // Freighters have seats: 0 — show $/kg capacity instead of $/seat.
+    const isFreighter = m.seats === 0;
+    const capitalLine = isFreighter
+      ? `Capital: ${formatMoney(m.price)}  ($${(m.price / m.cargoCapacityKg).toFixed(0)} per kg of capacity)`
+      : `Capital: ${formatMoney(m.price)}  (${formatMoney(m.price / m.seats)} per seat)`;
 
     return [
-      `${m.manufacturer} ${m.name}`,
-      `Capital: ${formatMoney(m.price)}  (${formatMoney(dollarPerSeat)} per seat)`,
+      `${m.manufacturer} ${m.name}${isFreighter ? '  (FREIGHTER)' : ''}`,
+      capitalLine,
       `Cargo capacity: ${m.cargoCapacityKg.toLocaleString('en-US')} kg`,
       `Range: ${m.range} km   ·   Cruise: ${m.speed} km/h`,
       `Fuel @ $${fuel.toFixed(2)}/L:  $${fuelPerKm.toFixed(2)} per km`,

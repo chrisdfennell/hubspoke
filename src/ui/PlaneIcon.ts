@@ -26,7 +26,16 @@ export function makePlaneIcon(
   withShadow: boolean = true,
   accentColor?: number,
 ): Phaser.GameObjects.Graphics {
-  const size = 4 + Math.sqrt(seats) * 0.6;
+  // Dedicated freighters report seats: 0, but the silhouette still needs
+  // to scale to the airframe size — fall back to a class-appropriate value
+  // so a 747F doesn't render as a dot next to its passenger sibling.
+  const FREIGHTER_FALLBACK: Record<PlaneClass, number> = {
+    turboprop: 70,
+    narrowbody: 190,
+    widebody: 400,
+  };
+  const sizeMetric = seats > 0 ? seats : FREIGHTER_FALLBACK[cls];
+  const size = 4 + Math.sqrt(sizeMetric) * 0.6;
   const g = scene.add.graphics({ x, y });
   const s = size;
   if (withShadow) {
