@@ -9,6 +9,7 @@ import { getDifficulty } from '../state/Difficulty';
 import { getCEO } from '../state/ceos';
 import { clock } from './Clock';
 import { acceptContract, dispatchCargo } from './Cargo';
+import { buyUsedPlane } from './UsedMarket';
 
 /**
  * Daily AI turn — each rival follows the same constraints the human does
@@ -76,6 +77,11 @@ export function aiDailyTurn() {
     // Cargo competition: with idle planes, grab profitable contracts off
     // the same shared board the human shops from.
     aiBidCargo(player);
+
+    // Used-plane sniping: cheaper than buying new when a good listing
+    // shows up. Rolls at half the aiBuyChance rate so the AI doesn't
+    // sweep the market clean every day on higher difficulties.
+    aiShopUsed(player);
   }
 }
 
@@ -197,11 +203,14 @@ function aiOpenRoute(player: Player) {
 
 function aiTradeStocks(player: Player) {
   const state = GameState.get();
+  const cfg = getDifficulty(state.difficulty);
 
   // ---- Sell pass: rebalance holdings ---------------------------------
   // Sell when (a) holdings are overvalued vs fundamental, OR (b) cash
   // is critically low — but NEVER abandon a takeover path (ownedFrac
-  // already past 30% of a target's float).
+  // already past 30% of a target's float). Difficulty scales the
+  // overvalue threshold: Easy AIs trim positions at 1.15× (eager
+  // sellers, low takeover threat), Brutal AIs hoard until 1.50×.
   for (const targetId of Object.keys(player.holdings)) {
     const owned = player.holdings[targetId] ?? 0;
     if (owned <= 0) continue;
@@ -216,7 +225,7 @@ function aiTradeStocks(player: Player) {
     // Don't sell shares of a target we're actively trying to take over.
     if (ownedFrac > 0.3) continue;
 
-    const overvalued = price > fund * 1.25;
+    const overvalued = price > fund * cfg.aiSellOvervalueThreshold;
     const cashStrapped = player.cash < 500_000;
     if (!overvalued && !cashStrapped) continue;
 
@@ -254,13 +263,57 @@ function aiTradeStocks(player: Player) {
 
   const price = state.stockPrices[best.id] ?? 50;
   const ownedFrac = (player.holdings[best.id] ?? 0) / getFloat(best.id);
-  const cfg = getDifficulty(state.difficulty);
   // Aggressive if close to majority; otherwise modest. Difficulty scales budget.
   const cashBudget = (ownedFrac > 0.3 ? player.cash * 0.25 : player.cash * 0.05) * cfg.aiStockBudgetMult;
   const sharesToBuy = Math.floor(cashBudget / price);
   if (sharesToBuy < 100) return;
   const stepped = Math.min(sharesToBuy, 50_000);
   buyShares(player, best.id, stepped);
+}
+
+/**
+ * Roll for a used-plane buy. Probability scales with difficulty
+ * (`aiBuyChance × 0.5` so even Brutal AIs leave most listings for the
+ * human). Scores affordable listings by `(capacity × condition) / ask`
+ * — passenger capacity for revenue planes, cargo capacity for
+ * freighters — and snaps up the best fit. Respects the fleet-size
+ * cap (5) the new-plane buy logic already uses.
+ */
+function aiShopUsed(player: Player) {
+  const state = GameState.get();
+  const cfg = getDifficulty(state.difficulty);
+  if (player.planes.length >= 5) return;
+  if (state.usedPlanes.length === 0) return;
+  if (Math.random() >= cfg.aiBuyChance * 0.5) return;
+
+  // Need a 10% liquidity buffer over the ask so we don't drain the
+  // bank account dry on the purchase and have nothing for repair/fuel.
+  const affordable = state.usedPlanes.filter(l => l.askPrice * 1.1 <= player.cash);
+  if (affordable.length === 0) return;
+
+  let best = affordable[0];
+  let bestScore = -Infinity;
+  for (const l of affordable) {
+    const model = getPlaneModel(l.modelId);
+    // Score by capacity-per-dollar. Freighters (seats=0) fall back to
+    // cargo capacity so the 747F isn't penalized against passenger metal.
+    const capacity = model.seats > 0 ? model.seats : model.cargoCapacityKg / 100;
+    const score = (capacity * l.condition) / l.askPrice;
+    if (score > bestScore) { bestScore = score; best = l; }
+  }
+
+  const result = buyUsedPlane(player, best.id, player.hubs[0]);
+  if (result.ok) {
+    const model = getPlaneModel(best.modelId);
+    state.pushNews(`${player.name} bought a used ${model.name} off the market for ${formatBriefMoney(best.askPrice)}.`);
+  }
+}
+
+/** Brief $ formatter used by AI news lines — keeps headlines compact. */
+function formatBriefMoney(n: number): string {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+  return `$${Math.round(n)}`;
 }
 
 /**
@@ -275,12 +328,12 @@ function aiTradeStocks(player: Player) {
  */
 function aiBidCargo(player: Player) {
   const state = GameState.get();
+  const cfg = getDifficulty(state.difficulty);
   const fuel = getFuelPrice();
   let accepted = 0;
-  const MAX_PER_DAY = 2;
 
   for (const contract of [...state.cargoOffers]) {
-    if (accepted >= MAX_PER_DAY) break;
+    if (accepted >= cfg.aiCargoMaxPerDay) break;
     if (contract.status !== 'available') continue;
 
     const from = getCity(contract.fromCity);
@@ -300,8 +353,9 @@ function aiBidCargo(player: Player) {
     const here = getCity(plane.status.kind === 'idle' ? plane.status.airportId : player.hubs[0]);
     const totalDist = distanceKm(here, from) + dist;
     const fuelCost = totalDist * getPlaneModel(plane.modelId).fuelPerKm * fuel;
-    // Demand at least 35% margin after fuel — covers wear + opportunity cost.
-    if (contract.payment - fuelCost < contract.payment * 0.35) continue;
+    // Difficulty gates the minimum margin — Easy AIs hold out for fat
+    // contracts; Brutal AIs sweep anything that clears 15%.
+    if (contract.payment - fuelCost < contract.payment * cfg.aiCargoMinMargin) continue;
     if (player.cash < fuelCost) continue;
 
     if (!acceptContract(player, contract.id)) continue;

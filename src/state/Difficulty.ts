@@ -18,6 +18,15 @@ export interface DifficultySettings {
   aiStockBudgetMult: number;
   /** Per-day chance per AI of attempting sabotage on the leader. */
   aiSabotageChance: number;
+  /** Max cargo contracts a single AI accepts per day. Higher = AI sweeps
+   *  the contract board harder before the human can grab one. */
+  aiCargoMaxPerDay: number;
+  /** Minimum net-of-fuel margin (0..1) an AI requires to bid on cargo.
+   *  Lower = AI takes thinner-margin contracts the player would skip. */
+  aiCargoMinMargin: number;
+  /** Price/fundamental ratio above which an AI sells held shares. Higher
+   *  = AI hoards positions longer (takeover threat sticks around). */
+  aiSellOvervalueThreshold: number;
 
   /** Multiplier on the default loan APR. */
   loanAprMult: number;
@@ -47,6 +56,9 @@ export const DIFFICULTIES: Record<Difficulty, DifficultySettings> = {
     aiBuyChance:      0.20,
     aiStockBudgetMult:0.5,
     aiSabotageChance: 0.02,
+    aiCargoMaxPerDay: 1,
+    aiCargoMinMargin: 0.50,
+    aiSellOvervalueThreshold: 1.15,
     loanAprMult:      0.7,
     eventChance:      0.15,
     requiredPrincipalPct: 0,
@@ -61,6 +73,9 @@ export const DIFFICULTIES: Record<Difficulty, DifficultySettings> = {
     aiBuyChance:      0.40,
     aiStockBudgetMult:1.0,
     aiSabotageChance: 0.06,
+    aiCargoMaxPerDay: 2,
+    aiCargoMinMargin: 0.35,
+    aiSellOvervalueThreshold: 1.25,
     loanAprMult:      1.0,
     eventChance:      0.25,
     requiredPrincipalPct: 0.04,
@@ -75,6 +90,9 @@ export const DIFFICULTIES: Record<Difficulty, DifficultySettings> = {
     aiBuyChance:      0.55,
     aiStockBudgetMult:1.5,
     aiSabotageChance: 0.10,
+    aiCargoMaxPerDay: 3,
+    aiCargoMinMargin: 0.25,
+    aiSellOvervalueThreshold: 1.35,
     loanAprMult:      1.3,
     eventChance:      0.35,
     requiredPrincipalPct: 0.07,
@@ -89,6 +107,9 @@ export const DIFFICULTIES: Record<Difficulty, DifficultySettings> = {
     aiBuyChance:      0.70,
     aiStockBudgetMult:2.0,
     aiSabotageChance: 0.15,
+    aiCargoMaxPerDay: 4,
+    aiCargoMinMargin: 0.15,
+    aiSellOvervalueThreshold: 1.50,
     loanAprMult:      1.6,
     eventChance:      0.45,
     requiredPrincipalPct: 0.10,

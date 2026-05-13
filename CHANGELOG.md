@@ -9,6 +9,52 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-13 (latest) — Difficulty-scaled AI: cargo, stock sells, used market
+
+The recently-shipped AI behaviors (cargo bidding, stock selling, used-
+market shopping) were all using uniform thresholds — Brutal rivals
+played the same tactical game as Easy ones, just with more starting
+chances baked in. Now the tactics themselves scale.
+
+### New difficulty knobs in `DIFFICULTIES`
+
+| Knob                          | Easy | Normal | Hard | Brutal |
+|-------------------------------|------|--------|------|--------|
+| `aiCargoMaxPerDay`            | 1    | 2      | 3    | 4      |
+| `aiCargoMinMargin` (fuel net) | 50%  | 35%    | 25%  | 15%    |
+| `aiSellOvervalueThreshold`    | 1.15 | 1.25   | 1.35 | 1.50   |
+
+**Cargo aggression** — `aiBidCargo` now reads `aiCargoMaxPerDay` and
+`aiCargoMinMargin` from difficulty. At Easy a single AI accepts at
+most one contract per day and only if it nets 50%+ over fuel.
+At Brutal, four contracts/day with a 15% margin bar — they'll grab
+contracts the player would walk past.
+
+**Stock sell threshold** — `aiTradeStocks` sell pass reads
+`aiSellOvervalueThreshold`. Easy AIs sell at 15% over fundamental
+(eager profit-takers, low takeover threat in the long run). Brutal
+AIs hold until 50% overvalued, so positions accumulate and the 25%
+→ 40% takeover-alert tiers fire much more often.
+
+### AI shops the used market
+
+New `aiShopUsed(player)` runs each daily turn. Roll probability is
+`aiBuyChance × 0.5` so even Brutal AIs (35% daily) leave most
+listings for the human. When the roll passes, the AI scores
+affordable listings by `(capacity × condition) / askPrice`
+— freighters fall back to `cargoCapacityKg / 100` so widebody
+freight metal isn't penalized vs passenger metal — and buys the
+best fit. Respects the existing 5-plane fleet cap and keeps a 10%
+liquidity buffer (`ask × 1.1 ≤ cash`) so the purchase doesn't crater
+operating cash.
+
+**Effect**: on Brutal, expect to see AI rivals sniping used 747-400Fs
+and pristine A220s off the market within hours of them listing — they
+shop new AND used now. On Easy, used listings sit around until they
+expire or you grab them.
+
+---
+
 ## 2026-05-13 (even later) — Used-plane market
 
 Workshop got the back-half it was missing. Until now the only fleet
