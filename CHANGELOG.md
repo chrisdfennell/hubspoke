@@ -9,6 +9,70 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-13 (phase 3) — Smarter AI: crew rotation, dividends, fleet pruning
+
+Three behaviors that close loops left open by today's earlier work
+(crew morale, dividends, used-plane market). AI rivals now react to
+their own morale, return capital when flush, and feed the used market.
+
+### `aiManageCrew` — morale-aware staffing
+
+Old behavior: hire to `planes + 1` while cash > $50K. Always the same
+buffer regardless of how strained the crew was.
+
+New behavior: buffer scales with morale.
+
+| Morale | Hire target |
+|---|---|
+| ≥50 | `planes + 1` (baseline) |
+| <50 | `planes + 2` (strained → ease utilization) |
+| <30 | `planes + 3` (burned out → emergency relief) |
+
+Plus a utilization > 1.0 catch: if the AI just bought a plane and the
+crew hasn't caught up yet, one extra pilot hire is forced through if
+cash allows. Same `PILOT_COST/MECH_COST` the human pays — no AI
+cheating.
+
+### `aiManageDividends` — return capital when flush
+
+AI rivals now declare quarterly dividends in line with their balance
+sheet:
+
+| Cash + reputation gates | Dividend |
+|---|---|
+| rep < 60 OR cash < $50M | $0 (cancel any existing) |
+| cash > $50M | $0.10 / share |
+| cash > $100M | $0.50 / share |
+| cash > $300M | $1.00 / share |
+| cash > $500M | $2.00 / share |
+
+Reuses `setDividend()` from Stocks.ts so payouts run through the same
+quarterly hook the human's dividends do. If the human owns shares in
+a dividend-paying AI rival, those credits show up in the news ticker
+the same as before.
+
+### `aiManageFleet` — sell to the used market
+
+Old behavior: AI bought planes (new + used) but never sold. Idle,
+low-condition planes sat on the apron forever.
+
+New behavior: each daily turn the AI checks its idle, route-less
+planes for one of two sale triggers:
+
+1. **Can't repair**: condition < 35% AND AI cash < 1.5× the repair
+   cost. The AI cuts losses instead of letting an unflyable plane
+   rot.
+2. **Over cap**: fleet size > 5 (rare — usually only after a
+   takeover absorbs a rival's fleet).
+
+Modest 35% daily roll so liquidation is gradual. Sales use
+`sellPlane()` from `UsedMarket.ts` — same code path the human's
+Workshop Sell button runs, with `ex-${airline}` source label.
+Net effect: the human's used-market shopping board now has a
+steady supply of trade-ins to scoop up at a discount.
+
+---
+
 ## 2026-05-13 (toggle) — "Run while tab is hidden" setting
 
 The earlier hidden-tab fix (auto-pausing music) was the wrong call —

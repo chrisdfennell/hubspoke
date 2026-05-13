@@ -14,6 +14,9 @@ import { hubCost } from '../state/Player';
 import { UPGRADES } from '../state/upgrades';
 import { ITEMS, applyBoostEffect } from '../state/items';
 import { dateToDay } from '../state/demandModifiers';
+import { crewUtilization } from './Personnel';
+import { setDividend } from './Stocks';
+import { sellPlane } from './UsedMarket';
 
 /**
  * Daily AI turn — each rival follows the same constraints the human does
@@ -33,17 +36,9 @@ export function aiDailyTurn() {
   for (const player of state.players) {
     if (!player.isAI) continue;
     if (state.takenOverBy[player.id]) continue; // eliminated rivals don't act
-    // Hire crew if needed before buying more planes. Same hire cost as
-    // the human pays in Personnel — kept locally as a constant so this
-    // file doesn't need to depend on the Personnel module.
-    while (player.pilots < player.planes.length + 1 && player.cash > 50_000) {
-      player.cash -= 8_000;
-      player.pilots += 1;
-    }
-    while (player.mechanics < player.planes.length + 1 && player.cash > 50_000) {
-      player.cash -= 4_000;
-      player.mechanics += 1;
-    }
+    // Crew management — staffing AND morale-aware extra hiring so a
+    // strained AI doesn't just sit on dropping morale.
+    aiManageCrew(player);
 
     // Workshop repair on the same cost formula the human auto-repair uses.
     // Threshold is more conservative than the human default (40% vs 50%) so
@@ -100,6 +95,15 @@ export function aiDailyTurn() {
     // pilot-training when the fleet is worn down. Same per-day cooldown
     // the human respects in the Duty Free room.
     aiUseBoosts(player);
+
+    // Dividend declaration — cash-rich, well-regarded AIs return capital
+    // to shareholders (which can include the human if they bought shares).
+    aiManageDividends(player);
+
+    // Fleet pruning — sell idle planes the AI can't afford to repair
+    // back to itself, or surplus planes that aren't earning. The plane
+    // lands on the same used market the human shops.
+    aiManageFleet(player);
   }
 }
 
@@ -507,6 +511,116 @@ function aiUseBoosts(player: Player) {
     const avgCondition = player.planes.reduce((sum, p) => sum + p.condition, 0) / player.planes.length;
     if (avgCondition < 0.6) {
       if (tryBoost('pilot-prog')) return;
+    }
+  }
+}
+
+/**
+ * Crew sizing for the AI: cover the fleet plus a buffer that scales
+ * with morale. Healthy crews keep the original +1 buffer. Strained
+ * crews (morale<50) target +2 to reduce utilization; burned-out crews
+ * (<30) target +3 since one resignation is one too many. Reuses the
+ * same hire cost the human pays in Personnel so the AI isn't cheating.
+ */
+function aiManageCrew(player: Player) {
+  const PILOT_COST = 8_000;
+  const MECH_COST = 4_000;
+  let buffer = 1;
+  if (player.morale < 30) buffer = 3;
+  else if (player.morale < 50) buffer = 2;
+  // If currently overworked (utilization > 1), force at least +1 over
+  // current headcount regardless of morale — catches the case where
+  // morale hasn't dropped yet but the AI just bought a plane.
+  const utilization = crewUtilization(player);
+  const targetPilots = player.planes.length + buffer;
+  const targetMechs  = player.planes.length + buffer;
+
+  while (player.pilots < targetPilots && player.cash > 50_000) {
+    player.cash -= PILOT_COST;
+    player.pilots += 1;
+  }
+  while (player.mechanics < targetMechs && player.cash > 50_000) {
+    player.cash -= MECH_COST;
+    player.mechanics += 1;
+  }
+  // One extra hiring pulse if we're still overworked after the loop
+  // (e.g., cash ran out partway). Pays for one of each if budget allows.
+  if (utilization > 1.0 && player.cash > 60_000) {
+    if (player.pilots < player.planes.length + buffer + 1) {
+      player.cash -= PILOT_COST;
+      player.pilots += 1;
+    }
+  }
+}
+
+/**
+ * Cash-rich, well-regarded AIs declare a quarterly dividend so they
+ * have something to attract buy-side interest with. Scales with cash
+ * reserves: comfortable airlines pay a token dividend, flush ones pay
+ * a proper one. Doesn't churn — once set, the dividend stays until
+ * the AI's situation changes enough to trip a re-evaluation.
+ */
+function aiManageDividends(player: Player) {
+  // Below these reputational + cash bars, no dividend — the airline
+  // needs the cash for ops or can't justify the investor signal.
+  if (player.reputation < 60) {
+    if (player.dividendPerShare > 0) setDividend(player, 0);
+    return;
+  }
+  if (player.cash < 50_000_000) {
+    if (player.dividendPerShare > 0) setDividend(player, 0);
+    return;
+  }
+  // Tier the dividend by cash reserves. Crossings are wide so the AI
+  // doesn't flip-flop between tiers on a single bad day.
+  let target = 0.10;
+  if (player.cash > 500_000_000) target = 2.00;
+  else if (player.cash > 300_000_000) target = 1.00;
+  else if (player.cash > 100_000_000) target = 0.50;
+
+  if (player.dividendPerShare !== target) {
+    setDividend(player, target);
+  }
+}
+
+/**
+ * Sell off planes the AI can't justify keeping — idle, low-condition
+ * planes the AI can't afford to repair to operating threshold. The
+ * plane lands on the public used market with `ex-${airline}` source
+ * label so the human can scoop it up. Rolls modestly each turn so
+ * pruning is incremental, not a fire-sale.
+ */
+function aiManageFleet(player: Player) {
+  // Only consider the AI's idle, route-less planes. Anything still
+  // assigned to a route is presumed earning.
+  const candidates = player.planes.filter(p =>
+    p.status.kind === 'idle' && p.routeId === null,
+  );
+  if (candidates.length === 0) return;
+
+  for (const plane of candidates) {
+    const model = getPlaneModel(plane.modelId);
+    const repairCost = (1 - plane.condition) * model.price * 0.01;
+    // Two trigger paths to sell:
+    //  1. Plane is in rough shape (<35% condition) AND AI doesn't have
+    //     the cash to repair it back to operating threshold.
+    //  2. Fleet is over the AI's effective cap (5) AND this plane is
+    //     unassigned — rare since the buy loop respects the cap, but
+    //     a takeover could push it over.
+    const cantRepair = plane.condition < 0.35 && player.cash < repairCost * 1.5;
+    const overCap = player.planes.length > 5;
+    if (!cantRepair && !overCap) continue;
+
+    // Modest daily roll so the AI doesn't liquidate its whole fleet on
+    // one bad day — same dampening shape we use elsewhere for fleet
+    // actions.
+    if (Math.random() >= 0.35) continue;
+
+    const result = sellPlane(player, plane.id);
+    if (result.ok) {
+      const state = GameState.get();
+      state.pushNews(`${player.name} sold ${plane.name} (${model.name}) onto the used market.`);
+      return; // one trade per day
     }
   }
 }
