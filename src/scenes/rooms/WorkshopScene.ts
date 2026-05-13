@@ -19,6 +19,8 @@ import { dateToDay } from '../../state/demandModifiers';
  *  a B747 / A380 misclick is real money down the drain otherwise. */
 const BIG_PURCHASE_THRESHOLD = 50_000_000;
 
+type WorkshopTab = 'buy' | 'used' | 'fleet';
+
 export class WorkshopScene extends RoomScene {
   /** When set, the Workshop renders a focused "Outfit" view for that
    *  plane instead of the buy table + fleet list. Cleared by the Back
@@ -27,10 +29,16 @@ export class WorkshopScene extends RoomScene {
    *  on the default view. */
   private outfitPlaneId: string | null = null;
 
+  /** Persisted across rebuild() calls within one scene visit so clicking
+   *  Repair / Sell / Buy doesn't bounce you back to the Buy tab. Reset
+   *  in create() so re-entering the scene always lands on Buy. */
+  private currentTab: WorkshopTab = 'buy';
+
   constructor() { super('WorkshopScene'); this.title = 'Workshop'; }
 
   create() {
     this.outfitPlaneId = null;
+    this.currentTab = 'buy';
     super.create();
   }
 
@@ -39,10 +47,12 @@ export class WorkshopScene extends RoomScene {
       this.buildOutfitView();
       return;
     }
-    this.buildBuyAndFleetView();
+    this.buildTabbedView();
   }
 
-  private buildBuyAndFleetView() {
+  /** Header (cash) + tab picker + selected-tab body. Replaces the old
+   *  single-page layout that stacked all three sections vertically. */
+  private buildTabbedView() {
     const state = GameState.get();
     const me = state.human;
     const b = this.panelBounds;
@@ -50,7 +60,54 @@ export class WorkshopScene extends RoomScene {
     let y = b.y + 80;
 
     this.addText(left, y, `Cash: ${formatMoney(me.cash)}`, 16, me.cash < 0 ? '#ff7b88' : COLORS.accentText);
-    y += 36;
+    y += 32;
+
+    this.buildTabPicker(left, y);
+    y += 40;
+
+    if (this.currentTab === 'buy') this.buildBuyTab(left, y);
+    else if (this.currentTab === 'used') this.buildUsedTab(left, y);
+    else this.buildFleetTab(left, y);
+  }
+
+  private buildTabPicker(left: number, topY: number) {
+    const state = GameState.get();
+    const tabs: Array<{ id: WorkshopTab; label: string }> = [
+      { id: 'buy',   label: 'Buy new' },
+      { id: 'used',  label: `Used market (${state.usedPlanes.length})` },
+      { id: 'fleet', label: `Your fleet (${state.human.planes.length})` },
+    ];
+    let tx = left;
+    for (const t of tabs) {
+      const w = Math.max(120, 16 + t.label.length * 7);
+      const isActive = this.currentTab === t.id;
+      const btn = new Button({
+        scene: this,
+        x: tx + w / 2,
+        y: topY,
+        width: w,
+        height: 26,
+        label: t.label,
+        bg: isActive ? 0x3d6a92 : 0x14304a,
+        bgHover: isActive ? 0x4a7da8 : 0x2a5780,
+        onClick: () => {
+          this.currentTab = t.id;
+          this.scrollTo(0);
+          this.rebuild();
+        },
+      });
+      this.content.add(btn);
+      tx += w + 8;
+    }
+  }
+
+  /** Buy-new-plane table — every PLANE_MODELS entry with class-tinted
+   *  silhouette, headline economics, and a Buy button (big-purchase
+   *  confirm modal at the BIG_PURCHASE_THRESHOLD). */
+  private buildBuyTab(left: number, startY: number) {
+    const state = GameState.get();
+    const me = state.human;
+    let y = startY;
 
     // Column headers — shifted right by the silhouette column width.
     const ICON_COL = 50;
@@ -130,38 +187,48 @@ export class WorkshopScene extends RoomScene {
 
       y += 36;
     }
+  }
 
-    // ===== Used-plane market =============================================
-    y += 16;
-    this.addText(left, y, 'Used market', 16, COLORS.accentText);
-    this.addText(left + 130, y + 4,
-      `Listings expire after ${LISTING_DAYS} days. Buying a used plane adds it to your active hub — you cover repair.`,
-      11, COLORS.textDim);
-    y += 24;
+  /** Used-plane market tab — silhouettes, condition, source, ask, days
+   *  left, and a Buy button per listing. */
+  private buildUsedTab(left: number, startY: number) {
+    const state = GameState.get();
+    const me = state.human;
+    let y = startY;
+
+    this.addText(left, y,
+      `Listings expire after ${LISTING_DAYS} days. Buying a used plane adds it to your active hub — you cover the repair.`,
+      12, COLORS.textDim);
+    y += 26;
 
     if (state.usedPlanes.length === 0) {
       this.addText(left, y, 'No used planes available right now. Check back tomorrow.', 13, COLORS.textDim);
-      y += 22;
-    } else {
-      this.addText(left + 50,  y, 'Model',     12, COLORS.textDim);
-      this.addText(left + 290, y, 'Condition', 12, COLORS.textDim);
-      this.addText(left + 390, y, 'Source',    12, COLORS.textDim);
-      this.addText(left + 510, y, 'Ask',       12, COLORS.textDim);
-      this.addText(left + 620, y, 'Listed',    12, COLORS.textDim);
-      y += 20;
-      const today = dateToDay(state.date);
-      for (const listing of state.usedPlanes) {
-        this.renderUsedRow(listing, left, y, me, today);
-        y += 30;
-      }
+      return;
     }
 
-    // Fleet section: condition + (placeholder) repair button.
-    y += 16;
-    this.addText(left, y, 'Your fleet', 16, COLORS.accentText);
-    y += 24;
+    this.addText(left + 50,  y, 'Model',     12, COLORS.textDim);
+    this.addText(left + 290, y, 'Condition', 12, COLORS.textDim);
+    this.addText(left + 390, y, 'Source',    12, COLORS.textDim);
+    this.addText(left + 510, y, 'Ask',       12, COLORS.textDim);
+    this.addText(left + 620, y, 'Listed',    12, COLORS.textDim);
+    y += 20;
+    const today = dateToDay(state.date);
+    for (const listing of state.usedPlanes) {
+      this.renderUsedRow(listing, left, y, me, today);
+      y += 30;
+    }
+  }
+
+  /** Fleet tab — one row per owned plane with Repair / Outfit / Rename /
+   *  Sell. The Outfit button drops into the existing single-plane outfit
+   *  view; everything else rebuilds in place. */
+  private buildFleetTab(left: number, startY: number) {
+    const state = GameState.get();
+    const me = state.human;
+    let y = startY;
+
     if (me.planes.length === 0) {
-      this.addText(left, y, 'No planes owned. Buy one above to get started.', 13, COLORS.textDim);
+      this.addText(left, y, 'No planes owned. Switch to "Buy new" or "Used market" to get started.', 13, COLORS.textDim);
       return;
     }
     this.addText(left,       y, 'Name',   12, COLORS.textDim);
@@ -342,9 +409,11 @@ export class WorkshopScene extends RoomScene {
     const me = state.human;
     const plane = me.planes.find(p => p.id === this.outfitPlaneId);
     if (!plane) {
-      // Plane was sold / crashed while in this view — bounce back.
+      // Plane was sold / crashed while in this view — bounce back to
+      // the Fleet tab so the player sees their remaining roster.
       this.outfitPlaneId = null;
-      this.buildBuyAndFleetView();
+      this.currentTab = 'fleet';
+      this.buildTabbedView();
       return;
     }
     const b = this.panelBounds;

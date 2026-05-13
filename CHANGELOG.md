@@ -9,6 +9,30 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-13 (closing) — Workshop tabs
+
+Adding the used-plane market on top of the buy table + fleet list made
+the Workshop scene a 60-row vertical scroll. Now it's three tabs at the
+top of the room, matching the pattern Travel Agency uses:
+
+- **Buy new** — the PLANE_MODELS catalog table.
+- **Used market (N)** — listings, counter in the tab label so you can
+  see how many used planes are out there without switching.
+- **Your fleet (N)** — owned planes with Repair / Outfit / Rename /
+  Sell. Counter in the tab label, same shape as Used.
+
+Tab state persists across `rebuild()` calls inside one scene visit
+(clicking Repair or Sell rebuilds and keeps you on Fleet) but resets
+to **Buy new** on re-entering the room. The Outfit sub-view still
+takes over the whole panel — `← Back` from outfit lands you on the
+Fleet tab.
+
+**Behavior preserved**: all the buttons, modals, and tooltips work
+exactly as before — this is pure layout. No state changes, no save-
+format changes.
+
+---
+
 ## 2026-05-13 (still) — Smarter AI phase 2: hubs, upgrades, boosts
 
 Three player-only mechanics the AI was just… not using. Now wired in.
