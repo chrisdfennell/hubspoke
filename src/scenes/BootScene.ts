@@ -327,11 +327,13 @@ export class BootScene extends Phaser.Scene {
         fontFamily: 'Segoe UI, Tahoma, sans-serif',
         fontSize: '12px',
         color: COLORS.textDim,
+        wordWrap: { width: 760 },
+        align: 'center',
       }).setOrigin(0.5));
 
     const cardW = 820;
     const cardH = 88;
-    const startY = GAME_HEIGHT / 2 - 195;
+    const startY = GAME_HEIGHT / 2 - 160;
 
     SCENARIOS.forEach((scenario, i) => {
       const cy = startY + i * (cardH + 6);
@@ -372,7 +374,7 @@ export class BootScene extends Phaser.Scene {
     const cancelBtn = new Button({
       scene: this,
       x: GAME_WIDTH / 2,
-      y: GAME_HEIGHT / 2 + 265,
+      y: GAME_HEIGHT / 2 + 275,
       width: 120, height: 32,
       label: 'Cancel',
       onClick: () => overlay.destroy(true),
