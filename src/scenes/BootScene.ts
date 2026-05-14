@@ -28,6 +28,7 @@ import { Button } from '../ui/Button';
 import { formatMoney } from '../systems/Clock';
 import { Difficulty, DIFFICULTIES } from '../state/Difficulty';
 import { CEOS } from '../state/ceos';
+import { CITIES, getCity } from '../state/catalog';
 import { sound } from '../systems/Sound';
 import { Modal } from '../ui/Modal';
 import { makePlaneIcon } from '../ui/PlaneIcon';
@@ -272,8 +273,9 @@ export class BootScene extends Phaser.Scene {
     difficulty: Difficulty,
     ceoId: string,
     customAirline: { name: string; color: number },
+    customHub: string,
   ) {
-    GameState.reset(difficulty, ceoId, customAirline);
+    GameState.reset(difficulty, ceoId, customAirline, customHub);
     setActiveSlot(id);
     this.go();
   }
@@ -566,19 +568,146 @@ export class BootScene extends Phaser.Scene {
       scene: this,
       x: GAME_WIDTH / 2 + 120, y: GAME_HEIGHT / 2 + 215,
       width: 160, height: 36,
-      label: 'Start Game',
+      label: 'Next: Hub →',
       bg: 0x2f6042,
       bgHover: 0x3f8055,
       textColor: '#f4ecdc',
       onClick: () => {
         overlay.destroy(true);
-        this.startNewGame(slotId, difficulty, ceoId, { name: chosenName, color: chosenColor });
+        this.openHubPicker(slotId, difficulty, ceoId, { name: chosenName, color: chosenColor });
       },
     });
     overlay.add(backBtn);
     overlay.add(startBtn);
 
     updatePreview();
+  }
+
+  /**
+   * Final new-game step — pick the city your airline operates out of.
+   * AI rivals get randomized hubs (chosen at GameState.bootstrap) so no
+   * two airlines start in the same city. The default selection is HNL
+   * to match the Honey Air homage; the player can pick any city with
+   * demand ≥ 1.0 from the picker grid.
+   */
+  private openHubPicker(
+    slotId: number,
+    difficulty: Difficulty,
+    ceoId: string,
+    customAirline: { name: string; color: number },
+  ) {
+    // Eligible hubs: major-demand only. Sorted by demand desc so the
+    // big markets sit at the top of the grid. The full 46-city catalog
+    // is too sprawly for a starting-hub picker.
+    const eligible = [...CITIES]
+      .filter(c => c.demand >= 1.0)
+      .sort((a, b) => b.demand - a.demand);
+    let chosenHub = eligible.find(c => c.id === 'hnl')?.id ?? eligible[0].id;
+
+    const overlay = this.add.container(0, 0).setDepth(50);
+    overlay.add(this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.7)
+      .setOrigin(0).setInteractive());
+    overlay.add(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 800, 580, COLORS.panel)
+      .setStrokeStyle(2, COLORS.panelBorder));
+
+    overlay.add(this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 260, 'Choose Your Hub', {
+      fontFamily: 'Segoe UI, Tahoma, sans-serif',
+      fontSize: '22px',
+      color: COLORS.accentText,
+      fontStyle: 'bold',
+    }).setOrigin(0.5));
+    overlay.add(this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 232,
+      `Where ${customAirline.name} flies from. Rivals will spawn at random hubs.`,
+      {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '12px',
+        color: COLORS.textDim,
+      }).setOrigin(0.5));
+
+    // Selection summary near the title — updates on every pick.
+    const summary = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 205, '', {
+      fontFamily: 'Segoe UI, Tahoma, sans-serif',
+      fontSize: '13px',
+      color: COLORS.text,
+    }).setOrigin(0.5);
+    overlay.add(summary);
+
+    // Grid of city chips. 5 columns; rows grow vertically. Each chip
+    // shows city name + demand multiplier; clicking selects it.
+    const cols = 5;
+    const cellW = 142;
+    const cellH = 34;
+    const gridLeft = GAME_WIDTH / 2 - (cols * cellW) / 2;
+    const gridTop = GAME_HEIGHT / 2 - 170;
+    const chips: Array<{ rect: Phaser.GameObjects.Rectangle; cityId: string }> = [];
+
+    const updateSummary = () => {
+      const c = getCity(chosenHub);
+      summary.setText(`Selected: ${c.name}, ${c.country}  ·  demand ×${c.demand.toFixed(2)}`);
+      chips.forEach(({ rect, cityId }) => {
+        rect.setFillStyle(cityId === chosenHub ? 0x3d6a92 : 0x14304a);
+        rect.setStrokeStyle(2, cityId === chosenHub ? 0xffc857 : 0x223046);
+      });
+    };
+
+    eligible.forEach((city, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const cx = gridLeft + col * cellW + cellW / 2;
+      const cy = gridTop + row * cellH;
+
+      const rect = this.add.rectangle(cx, cy, cellW - 6, cellH - 6, 0x14304a)
+        .setStrokeStyle(2, 0x223046)
+        .setInteractive({ useHandCursor: true });
+      const label = this.add.text(cx, cy,
+        `${city.name}  ${city.demand.toFixed(1)}×`,
+        {
+          fontFamily: 'Segoe UI, Tahoma, sans-serif',
+          fontSize: '12px',
+          color: COLORS.text,
+        }).setOrigin(0.5);
+      rect.on('pointerdown', () => {
+        chosenHub = city.id;
+        updateSummary();
+      });
+      rect.on('pointerover', () => {
+        if (city.id !== chosenHub) rect.setFillStyle(0x2a5780);
+      });
+      rect.on('pointerout', () => {
+        if (city.id !== chosenHub) rect.setFillStyle(0x14304a);
+      });
+      overlay.add(rect);
+      overlay.add(label);
+      chips.push({ rect, cityId: city.id });
+    });
+
+    const backBtn = new Button({
+      scene: this,
+      x: GAME_WIDTH / 2 - 120, y: GAME_HEIGHT / 2 + 240,
+      width: 120, height: 32,
+      label: 'Back',
+      onClick: () => {
+        overlay.destroy(true);
+        this.openAirlinePicker(slotId, difficulty, ceoId);
+      },
+    });
+    const startBtn = new Button({
+      scene: this,
+      x: GAME_WIDTH / 2 + 120, y: GAME_HEIGHT / 2 + 240,
+      width: 160, height: 36,
+      label: 'Start Game',
+      bg: 0x2f6042,
+      bgHover: 0x3f8055,
+      textColor: '#f4ecdc',
+      onClick: () => {
+        overlay.destroy(true);
+        this.startNewGame(slotId, difficulty, ceoId, customAirline, chosenHub);
+      },
+    });
+    overlay.add(backBtn);
+    overlay.add(startBtn);
+
+    updateSummary();
   }
 
   private go() {

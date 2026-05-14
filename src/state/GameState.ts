@@ -1,7 +1,7 @@
 import { Player, PlayerSnapshot } from './Player';
 import { Plane } from './Plane';
 import { Route } from './Route';
-import { DEFAULT_AIRLINES, HOME_AIRPORT, getCity, getPlaneModel } from './catalog';
+import { DEFAULT_AIRLINES, HOME_AIRPORT, CITIES, getCity, getPlaneModel } from './catalog';
 import { CEOS, getCEO, DEFAULT_CEO_ID } from './ceos';
 import { getFuelPrice, setFuelPrice } from '../systems/Economy';
 import { GameEvent } from '../systems/Events';
@@ -304,15 +304,17 @@ export class GameState {
 
   /** Reset to a fresh new game. CEO id is applied to the human player as
    *  part of bootstrap so perks (starting cash bonus, starting inventory,
-   *  etc.) land before any system hooks fire. */
+   *  etc.) land before any system hooks fire. `customHub` lets the player
+   *  pick where they're based — AI rivals get randomized hubs around it. */
   static reset(
     difficulty: Difficulty = 'normal',
     ceoId?: string,
     customAirline?: { name: string; color: number },
+    customHub?: string,
   ): GameState {
     GameState.instance = new GameState();
     GameState.instance.difficulty = difficulty;
-    GameState.instance.bootstrap(ceoId, customAirline);
+    GameState.instance.bootstrap(ceoId, customAirline, customHub);
     return GameState.instance;
   }
 
@@ -434,16 +436,32 @@ export class GameState {
     if (this.news.length > 200) this.news.length = 200;
   }
 
-  private bootstrap(ceoId?: string, customAirline?: { name: string; color: number }) {
+  private bootstrap(
+    ceoId?: string,
+    customAirline?: { name: string; color: number },
+    customHub?: string,
+  ) {
     const cfg = getDifficulty(this.difficulty);
+    // Human's hub is either the player's pick or the catalog default
+    // (HNL for Honey Air). AI rivals get randomized hubs picked from
+    // major-demand cities, distinct from each other AND from the
+    // human, so the world never spawns with two airlines sharing a
+    // home or with all rivals in HNL.
+    const humanHub = customHub && CITIES.some(c => c.id === customHub)
+      ? customHub
+      : DEFAULT_AIRLINES[0].home;
+    const aiCount = DEFAULT_AIRLINES.length - 1;
+    const aiHubs = pickRandomAIHubs(humanHub, aiCount);
+
     DEFAULT_AIRLINES.forEach((a, i) => {
       const isHuman = i === 0;
-      // Human-only override — keep AI rivals on their catalog defaults so
-      // headlines + the world map still read consistently regardless of
-      // what the player named themselves.
+      // Human-only override — keep AI rivals on their catalog name + color
+      // so headlines and the world map still read consistently regardless
+      // of what the player named themselves.
       const name  = isHuman && customAirline ? customAirline.name  : a.name;
       const color = isHuman && customAirline ? customAirline.color : a.color;
-      this.players.push(new Player(a.id, name, color, !isHuman, cfg.startCash, a.home));
+      const home  = isHuman ? humanHub : aiHubs[i - 1];
+      this.players.push(new Player(a.id, name, color, !isHuman, cfg.startCash, home));
     });
     this.humanIndex = 0;
     this.activeHub = this.human.hubs[0];
@@ -489,4 +507,23 @@ export class GameState {
     const ceoLabel = humanCEO ? ` — CEO: ${humanCEO.name}` : '';
     this.pushNews(`Welcome to ${this.human.name}. Difficulty: ${cfg.label}${ceoLabel}.`);
   }
+}
+
+/**
+ * Pick `count` random AI starting hubs from major-demand cities (>= 1.0)
+ * that aren't the human's hub and aren't duplicates of each other.
+ * Falls back to lower-demand cities if there aren't enough major ones
+ * left (shouldn't happen at the current catalog size, but defensive).
+ */
+function pickRandomAIHubs(humanHub: string, count: number): string[] {
+  const major = CITIES.filter(c => c.demand >= 1.0 && c.id !== humanHub);
+  const shuffled = [...major].sort(() => Math.random() - 0.5);
+  const picked = shuffled.slice(0, count).map(c => c.id);
+  // Defensive top-up if the major pool was tiny.
+  if (picked.length < count) {
+    const fallback = CITIES.filter(c => c.id !== humanHub && !picked.includes(c.id));
+    const shuffledFallback = [...fallback].sort(() => Math.random() - 0.5);
+    picked.push(...shuffledFallback.slice(0, count - picked.length).map(c => c.id));
+  }
+  return picked;
 }

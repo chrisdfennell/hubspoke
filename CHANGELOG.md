@@ -9,6 +9,48 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-14 (later 3) — Pick your hub + randomized AI rivals
+
+The expanded 46-city catalog made HNL feeling like a forced default
+even more obvious. New flow at game start:
+
+### New hub-picker step
+
+A fifth step in the new-game flow, after the airline picker:
+
+`Slot → Difficulty → CEO → Airline (name + tail) → **Hub** → Start`
+
+Major-demand cities (≥ 1.0) shown as a 5×N grid sorted by demand
+descending. Selected hub highlights gold; the summary line shows
+`Selected: City, Country · demand × N.NN` so you know what tier
+market you're choosing. Defaults to HNL to match the Honey Air
+classic experience for first-run players.
+
+### Randomized AI rival hubs
+
+AI rivals (Falcon, Phoenix, Tucan) used to be hardcoded to LAX, JFK,
+LHR. Now they pull random hubs at bootstrap from the same
+major-demand pool, excluding the human's chosen hub and each other.
+So every run spawns the rivals at different cities — sometimes you
+share a continent with all three, sometimes you're alone in
+Hawaii/Asia with rivals scattered across Europe.
+
+New `pickRandomAIHubs(humanHub, count)` helper in GameState.ts —
+shuffle, take N, fallback to lower-demand if the pool isn't deep
+enough (defensive only at current 46-city catalog).
+
+### Wire-through
+
+- `GameState.reset(difficulty, ceoId, customAirline, customHub)` —
+  new optional parameter.
+- `GameState.bootstrap(ceoId, customAirline, customHub)` — same.
+- `BootScene.startNewGame(...)` passes `customHub` through.
+- Pre-existing v2 balance migration that "resets AI hubs to defaults"
+  only fires for AIs at HNL (the legacy default), so randomized
+  hubs in new saves won't get clobbered on load.
+
+---
+
 ## 2026-05-14 (later 2) — More cities + cargo & charter achievements
 
 ### 16 new cities
