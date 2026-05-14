@@ -9,6 +9,46 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-14 (later 4) — 18 US international airports + range filter
+
+### 18 US international airports added
+
+The catalog jumped from 46 → 64 cities. Picks span the biggest gaps:
+
+| Tier | Cities |
+|---|---|
+| Mega hubs | DFW, EWR, CLT, IAD, PHL |
+| Major hubs | PHX, MCO, LAS, MSP, DTW, SLC |
+| Regional | SAN, TPA, BWI, PDX, AUS |
+| Outliers | ANC (Alaska), SJU (Puerto Rico) |
+
+DFW was a notable absence — American Airlines' largest hub and one
+of the busiest airports in the world. Now you can base out of Dallas
+or have a rival do it. Demand multipliers calibrated to real traffic
+(DFW 1.4 mega-hub, mid-tier hubs 1.1–1.2, regional 1.0, outliers
+0.9). All systems (routes, cargo, charters, sponsors, lounge contacts,
+hub picker, AI hub randomization) pick up the new cities
+automatically.
+
+### Travel Agency: out-of-range destinations dimmed
+
+A destination beyond your fleet's max range used to look identical
+to one in range — the dispatch would just silently fail later. Now:
+
+- The header shows `Fleet max range: N,NNN km — destinations beyond
+  it are dimmed.` when you have any planes.
+- Rows where `distance > fleetMaxRange` render in the dim text color,
+  with the distance cell suffixed `(out of range)` in red.
+- The `Open route` button still works — you might be planning to buy
+  a longer-range plane later. The visual cue is "this won't fly
+  today, not this is locked."
+
+With the catalog at 64 cities and a starter Cessna's 1,900 km range
+on day 1, this fixes the "why isn't my route launching?" mystery
+that the bigger catalog made more painful.
+
+---
+
 ## 2026-05-14 (later 3) — Pick your hub + randomized AI rivals
 
 The expanded 46-city catalog made HNL feeling like a forced default

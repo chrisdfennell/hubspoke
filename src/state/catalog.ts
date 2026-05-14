@@ -331,6 +331,28 @@ export const CITIES: CityData[] = [
   { id: 'mel', name: 'Melbourne',    country: 'Australia',lat:-37.67,lon:  144.84, demand: 1.2 },
   { id: 'akl', name: 'Auckland',     country: 'New Zealand',lat:-37.01,lon:174.79, demand: 1.1 },
   { id: 'cpt', name: 'Cape Town',    country: 'S. Africa',lat:-33.97,lon:   18.60, demand: 1.0 },
+  // ----- Expansion set 3 (2026-05-14): major US international airports. -----
+  // Big hubs first (mega airline hubs with serious international service)
+  { id: 'dfw', name: 'Dallas-Fort Worth',country:'USA',lat: 32.90, lon:  -97.04, demand: 1.4 },
+  { id: 'clt', name: 'Charlotte',    country: 'USA',     lat: 35.21, lon:  -80.94, demand: 1.2 },
+  { id: 'iad', name: 'Washington Dulles',country:'USA', lat: 38.95, lon:  -77.46, demand: 1.2 },
+  { id: 'phl', name: 'Philadelphia', country: 'USA',     lat: 39.87, lon:  -75.24, demand: 1.2 },
+  { id: 'ewr', name: 'Newark',       country: 'USA',     lat: 40.69, lon:  -74.17, demand: 1.3 },
+  { id: 'phx', name: 'Phoenix',      country: 'USA',     lat: 33.43, lon: -112.01, demand: 1.2 },
+  { id: 'mco', name: 'Orlando',      country: 'USA',     lat: 28.43, lon:  -81.31, demand: 1.2 },
+  { id: 'las', name: 'Las Vegas',    country: 'USA',     lat: 36.08, lon: -115.15, demand: 1.2 },
+  { id: 'msp', name: 'Minneapolis',  country: 'USA',     lat: 44.88, lon:  -93.22, demand: 1.1 },
+  { id: 'dtw', name: 'Detroit',      country: 'USA',     lat: 42.21, lon:  -83.35, demand: 1.1 },
+  { id: 'slc', name: 'Salt Lake City',country:'USA',    lat: 40.79, lon: -111.98, demand: 1.1 },
+  // Mid-tier regional hubs
+  { id: 'san', name: 'San Diego',    country: 'USA',     lat: 32.73, lon: -117.19, demand: 1.0 },
+  { id: 'tpa', name: 'Tampa',        country: 'USA',     lat: 27.97, lon:  -82.53, demand: 1.0 },
+  { id: 'bwi', name: 'Baltimore',    country: 'USA',     lat: 39.18, lon:  -76.67, demand: 1.0 },
+  { id: 'pdx', name: 'Portland',     country: 'USA',     lat: 45.59, lon: -122.60, demand: 1.0 },
+  { id: 'aus', name: 'Austin',       country: 'USA',     lat: 30.19, lon:  -97.67, demand: 1.0 },
+  // Distinctive geographic outliers (Pacific + Caribbean)
+  { id: 'anc', name: 'Anchorage',    country: 'USA',     lat: 61.17, lon: -149.99, demand: 0.9 },
+  { id: 'sju', name: 'San Juan',     country: 'Puerto Rico',lat:18.44,lon: -66.00, demand: 0.9 },
 ];
 
 // Great-circle distance in km.

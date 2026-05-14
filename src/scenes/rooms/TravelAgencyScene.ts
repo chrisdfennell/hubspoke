@@ -124,7 +124,17 @@ export class TravelAgencyScene extends RoomScene {
     // LEFT: open new routes from active hub. Sort by distance ascending
     // so nearest destinations surface first — the catalog order put
     // Hawaii at the top, which read as nonsensical from e.g. JFK.
+    // Fleet's max range is also computed so we can grey out destinations
+    // no plane in the player's fleet can reach.
+    const fleetMaxRange = me.planes.length > 0
+      ? Math.max(...me.planes.map(p => getPlaneModel(p.modelId).range))
+      : 0;
     this.addText(left, startY, `New Routes from ${activeCity.name}`, 16, COLORS.accentText);
+    if (fleetMaxRange > 0) {
+      this.addText(left + 260, startY + 4,
+        `Fleet max range: ${fleetMaxRange.toLocaleString('en-US')} km — destinations beyond it are dimmed.`,
+        11, COLORS.textDim);
+    }
     let y = startY + 30;
     this.addText(left,       y, 'Destination', 12, COLORS.textDim);
     this.addText(left + 200, y, 'Distance',    12, COLORS.textDim);
@@ -142,10 +152,18 @@ export class TravelAgencyScene extends RoomScene {
         (r.fromCity === dest.id && r.toCity === activeCity.id)
       );
       const price = suggestedTicketPrice(dist, activeCity.demand, dest.demand);
+      // Out-of-range: no plane in the fleet can reach this destination.
+      // We still render the row + allow opening the route (player might
+      // buy a longer-range plane later), but everything reads dimmer.
+      const outOfRange = fleetMaxRange > 0 && dist > fleetMaxRange;
+      const rowColor = outOfRange ? COLORS.textDim : COLORS.text;
+      const distLabel = outOfRange
+        ? `${Math.round(dist)} km  (out of range)`
+        : `${Math.round(dist)} km`;
 
-      this.addText(left,       y + 6, dest.name, 13);
-      this.addText(left + 200, y + 6, `${Math.round(dist)} km`, 13);
-      this.addText(left + 290, y + 6, formatMoney(price), 13);
+      this.addText(left,       y + 6, dest.name, 13, rowColor);
+      this.addText(left + 200, y + 6, distLabel, 13, outOfRange ? '#ff9aa6' : rowColor);
+      this.addText(left + 290, y + 6, formatMoney(price), 13, rowColor);
 
       const btn = new Button({
         scene: this,
