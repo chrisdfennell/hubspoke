@@ -145,6 +145,12 @@ export function landArrivedCharters() {
       state.charterCompleted.unshift(contract);
       if (state.charterCompleted.length > 80) state.charterCompleted.length = 80;
       if (!player.isAI) {
+        // Charter achievement stats — count, lifetime pax, biggest group.
+        state.stats.charterDeliveries++;
+        state.stats.charterPaxFlown += contract.paxCount;
+        if (contract.paxCount > state.stats.charterBiggestGroup) {
+          state.stats.charterBiggestGroup = contract.paxCount;
+        }
         state.pushNews(`Charter delivered ${getCity(contract.fromCity).name} → ${getCity(contract.toCity).name} (${contract.paxCount} pax): +$${contract.payment.toLocaleString('en-US')}`);
       }
     }

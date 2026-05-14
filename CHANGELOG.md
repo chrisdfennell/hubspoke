@@ -9,6 +9,56 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-14 (later 2) — More cities + cargo & charter achievements
+
+### 16 new cities
+
+The catalog jumped from 30 → 46 with regional gap-fills:
+
+| Region | Cities added |
+|---|---|
+| US interior/east | ATL, DEN, BOS, IAH |
+| Canada | YVR |
+| South America | EZE (Buenos Aires), BOG (Bogotá) |
+| Europe | AMS, MUC |
+| Middle East | DOH |
+| Asia | BKK, DEL, TPE, KUL |
+| Oceania | MEL, AKL |
+| Africa | CPT |
+
+Demand multipliers calibrated to real-world hub traffic (ATL 1.4
+because it's one of the busiest airports on the planet; AMS 1.4 for
+Schiphol; secondary hubs 1.0–1.2). All routes / cargo / charters /
+sponsors / lounge contacts use the same catalog, so the new
+destinations show up in every system automatically.
+
+### 9 cargo + charter achievements
+
+New stats fields on `GameStats`:
+- `cargoDeliveries`, `cargoKgShipped`, `cargoBiggestPayment`
+- `charterDeliveries`, `charterPaxFlown`, `charterBiggestGroup`
+
+Incremented in `Cargo.landArrivedCargo` and `Charters.landArrivedCharters`
+(human-only — AI cargo deliveries don't tally toward the player's
+achievement progress).
+
+| ID | Name | Target |
+|---|---|---|
+| first-cargo | First cargo delivery | 1 |
+| cargo-10 | 10 cargo deliveries | 10 |
+| cargo-100 | 100 cargo deliveries | 100 |
+| cargo-1m-kg | Million-kg shipper | 1,000,000 kg lifetime |
+| cargo-big-pay | Big haul | $1M+ single contract |
+| first-charter | First charter | 1 |
+| charter-10 | 10 charters delivered | 10 |
+| charter-100 | 100 charters delivered | 100 |
+| charter-big-group | Mega charter | 300+ pax single contract |
+
+All land under the existing `operations` category so they show up in
+the Stats panel alongside the flight + passenger counters.
+
+---
+
 ## 2026-05-14 (tune) — Rested-crew threshold bumped
 
 **Reported**: with 4 planes and 6 pilots, utilization showed 67%

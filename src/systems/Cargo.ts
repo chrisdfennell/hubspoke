@@ -149,6 +149,13 @@ export function landArrivedCargo() {
       state.cargoCompleted.unshift(contract);
       if (state.cargoCompleted.length > 80) state.cargoCompleted.length = 80;
       if (!player.isAI) {
+        // Career-stat hooks for the cargo achievements — count, kg
+        // shipped lifetime, and highest single payment.
+        state.stats.cargoDeliveries++;
+        state.stats.cargoKgShipped += contract.weightKg;
+        if (contract.payment > state.stats.cargoBiggestPayment) {
+          state.stats.cargoBiggestPayment = contract.payment;
+        }
         state.pushNews(`Delivered cargo ${getCity(contract.fromCity).name} → ${getCity(contract.toCity).name}: +$${contract.payment.toLocaleString('en-US')}`);
       }
     }

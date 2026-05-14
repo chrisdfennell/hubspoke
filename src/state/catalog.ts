@@ -308,6 +308,29 @@ export const CITIES: CityData[] = [
   { id: 'pek', name: 'Beijing',      country: 'China',   lat: 40.08, lon:  116.59, demand: 1.3 },
   { id: 'hkg', name: 'Hong Kong',    country: 'China',   lat: 22.31, lon:  113.91, demand: 1.3 },
   { id: 'icn', name: 'Seoul',        country: 'S. Korea',lat: 37.46, lon:  126.44, demand: 1.2 },
+  // ----- Expansion set 2 (2026-05-14): fill regional gaps. -----
+  // North America interior + east coast
+  { id: 'atl', name: 'Atlanta',      country: 'USA',     lat: 33.64, lon:  -84.43, demand: 1.4 },
+  { id: 'den', name: 'Denver',       country: 'USA',     lat: 39.86, lon: -104.67, demand: 1.2 },
+  { id: 'bos', name: 'Boston',       country: 'USA',     lat: 42.36, lon:  -71.01, demand: 1.2 },
+  { id: 'iah', name: 'Houston',      country: 'USA',     lat: 29.98, lon:  -95.34, demand: 1.2 },
+  { id: 'yvr', name: 'Vancouver',    country: 'Canada',  lat: 49.19, lon: -123.18, demand: 1.1 },
+  // South America
+  { id: 'eze', name: 'Buenos Aires', country: 'Argentina',lat:-34.82, lon: -58.54, demand: 1.1 },
+  { id: 'bog', name: 'Bogotá',       country: 'Colombia',lat:  4.70, lon:  -74.14, demand: 1.0 },
+  // Europe + Middle East
+  { id: 'ams', name: 'Amsterdam',    country: 'Netherlands',lat:52.31,lon:    4.76, demand: 1.4 },
+  { id: 'muc', name: 'Munich',       country: 'Germany', lat: 48.35, lon:   11.79, demand: 1.3 },
+  { id: 'doh', name: 'Doha',         country: 'Qatar',   lat: 25.27, lon:   51.61, demand: 1.3 },
+  // Asia-Pacific
+  { id: 'bkk', name: 'Bangkok',      country: 'Thailand',lat: 13.69, lon:  100.75, demand: 1.3 },
+  { id: 'del', name: 'Delhi',        country: 'India',   lat: 28.57, lon:   77.10, demand: 1.3 },
+  { id: 'tpe', name: 'Taipei',       country: 'Taiwan',  lat: 25.08, lon:  121.23, demand: 1.2 },
+  { id: 'kul', name: 'Kuala Lumpur', country: 'Malaysia',lat:  2.74, lon:  101.71, demand: 1.2 },
+  // Oceania + Africa
+  { id: 'mel', name: 'Melbourne',    country: 'Australia',lat:-37.67,lon:  144.84, demand: 1.2 },
+  { id: 'akl', name: 'Auckland',     country: 'New Zealand',lat:-37.01,lon:174.79, demand: 1.1 },
+  { id: 'cpt', name: 'Cape Town',    country: 'S. Africa',lat:-33.97,lon:   18.60, demand: 1.0 },
 ];
 
 // Great-circle distance in km.

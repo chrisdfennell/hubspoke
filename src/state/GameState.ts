@@ -120,6 +120,18 @@ export interface GameStats {
   hubsBought: number;
   daysPlayed: number;
   peakNetWorth: number;
+  /** Cumulative cargo deliveries (successful only). */
+  cargoDeliveries: number;
+  /** Lifetime kg shipped via cargo contracts. */
+  cargoKgShipped: number;
+  /** Highest single cargo payment cleared. */
+  cargoBiggestPayment: number;
+  /** Cumulative charter deliveries. */
+  charterDeliveries: number;
+  /** Lifetime passengers carried on charters. */
+  charterPaxFlown: number;
+  /** Largest single charter (passengers) completed. */
+  charterBiggestGroup: number;
 }
 
 export const DEFAULT_STATS: GameStats = {
@@ -137,6 +149,12 @@ export const DEFAULT_STATS: GameStats = {
   hubsBought: 0,
   daysPlayed: 0,
   peakNetWorth: 0,
+  cargoDeliveries: 0,
+  cargoKgShipped: 0,
+  cargoBiggestPayment: 0,
+  charterDeliveries: 0,
+  charterPaxFlown: 0,
+  charterBiggestGroup: 0,
 };
 
 export interface GameSnapshot {
