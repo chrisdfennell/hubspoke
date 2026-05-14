@@ -9,6 +9,73 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-14 (later 5) — Weather events
+
+Six new weather-event blueprints, each pairing a demand drop with a
+new **mishap-chance multiplier** at the affected city. Storms now
+*matter operationally* — not just for ticket sales but for whether
+your neglected plane declares an emergency on approach.
+
+### New `weatherHazards` state
+
+`state/weatherHazards.ts` mirrors `demandModifiers.ts` line-for-line:
+per-city multiplier stack, expires by game-day, `applyWeatherHazard()`
+to write and `getHazardMult()` to read. Persisted in the snapshot
+alongside demand modifiers. Default multiplier is 1.0 (no effect).
+
+### Wired into Flights.maybeMishap
+
+The mishap-chance pipeline now reads the destination's hazard
+multiplier:
+
+```
+failChance = (0.5 − condition) × 0.4
+           × moraleMishapMult(player.morale)
+           × getHazardMult(destinationCity, today)
+```
+
+A pristine plane still won't mishap (the `condition < 0.5` gate),
+but a marginal plane landing into a hurricane is much more likely to
+declare an emergency than the same plane landing in clear weather.
+
+### Weather event blueprints
+
+Each has a per-day weight, hits one city (chosen from a climate-
+appropriate pool), and stacks both `applyDemandMod` and
+`applyWeatherHazard`:
+
+| Event | Cities | Demand × | Mishap × | Days |
+|---|---|---|---|---|
+| Thunderstorm cluster | Tropical+coastal | 0.65 | 1.40 | 2 |
+| Hurricane / typhoon | Tropical | 0.30 | 2.00 | 5 |
+| Blizzard | Cold-climate | 0.55 | 1.60 | 3 |
+| Dense fog | Foggy-prone (SFO, LHR, …) | 0.80 | 1.25 | 1 |
+| Heatwave | Hot-climate | 0.85 | 1.15 | 4 |
+| Ice storm | Cold-climate | 0.40 | 1.80 | 2 |
+
+Climate buckets are defined at the top of `Events.ts` — tropical
+cities (HNL, MIA, SIN, MEX, BKK, …), cold-winter cities (ORD, JFK,
+MSP, FRA, ICN, NRT, ANC, …), heatwave-prone cities (PHX, LAS, DFW,
+DXB, …), fog-prone cities (SFO, LHR, CDG, AMS, …). A snowstorm in
+Singapore won't fire; a hurricane in Boston won't either.
+
+All weather magnitudes scale with `settings.eventSeverity` (Off/Mild/
+Normal/Harsh) like every other event, so a 'mild' run halves storm
+impact and 'harsh' multiplies it by 1.5×.
+
+### What this changes
+
+- **Run-to-run variety** — every game has different weather
+  fingerprints depending on which blueprints fire and where.
+- **Operational stakes** — keeping your fleet at high condition
+  matters more in stormy seasons, because a neglected plane has
+  ~2× crash chance landing into a hurricane.
+- **Hub strategy** — basing your airline at a notorious-weather
+  city (e.g. ORD for blizzards, MIA for hurricanes) has real ops
+  cost vs basing at a fair-weather hub.
+
+---
+
 ## 2026-05-14 (later 4) — 18 US international airports + range filter
 
 ### 18 US international airports added

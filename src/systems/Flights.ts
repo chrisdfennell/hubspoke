@@ -3,6 +3,7 @@ import { Plane } from '../state/Plane';
 import { Route } from '../state/Route';
 import { flightMinutes, flightProfit, expectedLoadFactor, migrateBalance, fuelCost } from './Economy';
 import { maxPlanesStaffed, moraleMishapMult, MORALE_CRASH_HIT, MORALE_INCIDENT_HIT } from './Personnel';
+import { getHazardMult } from '../state/weatherHazards';
 import { sound } from './Sound';
 import { clock } from './Clock';
 import { distanceKm, getCity } from '../state/catalog';
@@ -136,16 +137,18 @@ export function dispatchIdlePlanes() {
  * Mitigation: settings.autoRepairThreshold (daily sweep) catches planes
  * before they reach the danger zone if the player wants the hands-off route.
  */
-function maybeMishap(player: Player, plane: Plane, passengers: number) {
+function maybeMishap(player: Player, plane: Plane, passengers: number, destinationCityId: string) {
   if (plane.condition >= 0.5) return;
   // Linear ramp from 0% chance at cond=0.5 to 20% at cond=0.0. Morale
   // amplifies — overworked, low-morale crews miss problems that would
-  // otherwise be caught pre-flight.
+  // otherwise be caught pre-flight. Weather at the destination piles
+  // on top (storm/hurricane multiply the chance further).
+  const state = GameState.get();
   let failChance = (0.5 - plane.condition) * 0.4;
   failChance *= moraleMishapMult(player.morale);
+  failChance *= getHazardMult(destinationCityId, state.date);
   if (Math.random() >= failChance) return;
 
-  const state = GameState.get();
   // Below 15% condition there's a 30% chance the incident is a full crash.
   const crashOdds = plane.condition < 0.15 ? 0.3 : 0;
   const crashed = Math.random() < crashOdds;
@@ -258,9 +261,10 @@ export function landArrivedPlanes() {
         // rolls for an incident; the lower the condition, the higher the
         // chance and the worse the outcome. Crashes destroy the plane;
         // incidents force an immediate emergency repair + reputation hit.
-        // Player.id is passed so AI rivals' planes can crash too — only
-        // human gets a news headline.
-        maybeMishap(player, plane, result.passengers);
+        // Destination is passed so weather hazard at the landing city
+        // can multiply mishap chance. Player.id is passed so AI rivals'
+        // planes can crash too — only human gets a news headline.
+        maybeMishap(player, plane, result.passengers, arrivedAt);
       } else if (status.kind === 'ferry') {
         if (now < status.arrivesAt) continue;
         const arrivedAt = status.to;

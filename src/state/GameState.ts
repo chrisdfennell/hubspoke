@@ -6,6 +6,7 @@ import { CEOS, getCEO, DEFAULT_CEO_ID } from './ceos';
 import { getFuelPrice, setFuelPrice } from '../systems/Economy';
 import { GameEvent } from '../systems/Events';
 import { snapshotModifiers, restoreModifiers } from './demandModifiers';
+import { snapshotHazards, restoreHazards } from './weatherHazards';
 import { CargoContract, getContractCounter, setContractCounter } from '../systems/Cargo';
 import { CharterContract } from './Charter';
 import { getCharterCounter, setCharterCounter } from '../systems/Charters';
@@ -184,6 +185,8 @@ export interface GameSnapshot {
   gameEvents: GameEvent[];
   /** Active per-city demand modifiers. */
   demandModifiers: Record<string, { mult: number; expiresOn: number }[]>;
+  /** Active per-city mishap-chance multipliers from weather events. */
+  weatherHazards?: Record<string, { mult: number; expiresOn: number }[]>;
   /** Player id who has been forced into receivership/takeover, or null. */
   takenOverBy: Record<string, string>;
   /** Cargo state. */
@@ -362,6 +365,7 @@ export class GameState {
     s.achievementsUnlocked = [...(snap.achievementsUnlocked ?? snap.milestonesReached ?? [])];
     s.stats = { ...DEFAULT_STATS, ...(snap.stats ?? {}) };
     restoreModifiers(snap.demandModifiers);
+    restoreHazards(snap.weatherHazards);
     setFuelPrice(snap.fuelPrice);
     GameState.instance = s;
     return s;
@@ -384,6 +388,7 @@ export class GameState {
       usedListingCounter: getUsedListingCounter(),
       gameEvents: this.gameEvents,
       demandModifiers: snapshotModifiers(),
+      weatherHazards: snapshotHazards(),
       takenOverBy: { ...this.takenOverBy },
       cargoOffers: this.cargoOffers,
       cargoActive: this.cargoActive,

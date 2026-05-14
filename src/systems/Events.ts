@@ -2,6 +2,7 @@ import { GameState, GameDate } from '../state/GameState';
 import { CITIES, getCity } from '../state/catalog';
 import { getFuelPrice, setFuelPrice } from './Economy';
 import { applyDemandMod } from '../state/demandModifiers';
+import { applyWeatherHazard } from '../state/weatherHazards';
 import { getDifficulty } from '../state/Difficulty';
 import { sound } from './Sound';
 import { clock } from './Clock';
@@ -20,6 +21,19 @@ export interface GameEvent {
 
 const PACIFIC_CITY_IDS = ['hnl', 'ogg', 'koa', 'ito', 'lih', 'ppg', 'pap'];
 const INTERCONTINENTAL_IDS = ['lhr', 'cdg', 'fra', 'nrt', 'syd', 'sin', 'dxb', 'gru', 'jnb'];
+
+// Weather climate buckets — used by the weather event blueprints so
+// snowstorms hit Boston rather than Honolulu. Cities not listed in any
+// bucket get default treatment for that weather kind (i.e. tornadoes
+// won't try to hit Singapore). Identifiers reference the catalog city ids.
+const TROPICAL_STORM_IDS  = ['hnl', 'ogg', 'koa', 'ito', 'lih', 'ppg', 'pap', 'mia', 'sju', 'mco', 'tpa', 'mex', 'gru', 'kul', 'sin', 'bom', 'hkg', 'bkk', 'pap'];
+const COLD_WINTER_IDS     = ['ord', 'jfk', 'bos', 'msp', 'dtw', 'cle', 'pit', 'phl', 'ewr', 'iad', 'bwi', 'yyz', 'yvr', 'sea', 'pdx', 'den', 'slc', 'anc', 'fra', 'muc', 'cdg', 'lhr', 'ams', 'fco', 'mad', 'vie', 'ist', 'pek', 'icn', 'nrt'];
+const HEATWAVE_IDS        = ['lax', 'sfo', 'phx', 'las', 'iah', 'dfw', 'aus', 'atl', 'mia', 'mco', 'tpa', 'mad', 'fco', 'ist', 'del', 'bom', 'dxb', 'doh', 'mex', 'syd', 'jnb', 'cpt'];
+const FOG_IDS             = ['sfo', 'lhr', 'cdg', 'sea', 'pdx', 'ams', 'fra', 'muc', 'bos', 'jfk', 'ewr', 'pit', 'ord', 'pek', 'icn', 'nrt'];
+
+function pickFrom(ids: readonly string[]): string {
+  return ids[Math.floor(Math.random() * ids.length)];
+}
 
 let eventCounter = 1;
 const nextId = () => `e${eventCounter++}`;
@@ -109,6 +123,112 @@ const BLUEPRINTS: EventBlueprint[] = [
         headline: 'Mauna Loa erupts — airspace closures',
         body: `Volcanic ash plumes have grounded several inter-island flights to Hilo and Kona.`,
         impact: 'Hilo & Kona demand −70% for 5 days',
+      };
+    },
+  },
+
+  // ----- Weather events. Each pairs a demand mod (passengers don't show
+  // up) with a weather hazard (mishaps more likely on landing). Severity
+  // scaler in settings controls magnitude. -----
+
+  // Thunderstorm cluster at a tropical city
+  {
+    weight: 6,
+    fire: (state) => {
+      const cityId = pickFrom(TROPICAL_STORM_IDS);
+      const city = getCity(cityId);
+      applyDemandMod(cityId, scaledMult(0.65), 2, state.date);
+      applyWeatherHazard(cityId, 1 + scaledDelta(0.4), 2, state.date);
+      return {
+        id: nextId(), date: { ...state.date }, severity: 'bad',
+        headline: `Thunderstorm cluster grounds flights at ${city.name}`,
+        body: `Severe weather over ${city.name} is forcing diversions. Approaches are turbulent enough to keep planes on the ground.`,
+        impact: `${city.name} demand −35%, mishap chance +40% for 2 days`,
+      };
+    },
+  },
+
+  // Hurricane / typhoon making landfall (tropical, worse than thunderstorm)
+  {
+    weight: 3,
+    fire: (state) => {
+      const cityId = pickFrom(TROPICAL_STORM_IDS);
+      const city = getCity(cityId);
+      applyDemandMod(cityId, scaledMult(0.30), 5, state.date);
+      applyWeatherHazard(cityId, 1 + scaledDelta(1.0), 5, state.date);
+      return {
+        id: nextId(), date: { ...state.date }, severity: 'bad',
+        headline: `Hurricane bears down on ${city.name}`,
+        body: `A major tropical storm is making landfall near ${city.name}. Airports are shutting their runways through the system.`,
+        impact: `${city.name} demand −70%, mishap chance +100% for 5 days`,
+      };
+    },
+  },
+
+  // Blizzard at a cold-climate city
+  {
+    weight: 5,
+    fire: (state) => {
+      const cityId = pickFrom(COLD_WINTER_IDS);
+      const city = getCity(cityId);
+      applyDemandMod(cityId, scaledMult(0.55), 3, state.date);
+      applyWeatherHazard(cityId, 1 + scaledDelta(0.6), 3, state.date);
+      return {
+        id: nextId(), date: { ...state.date }, severity: 'bad',
+        headline: `Blizzard hits ${city.name} — de-icing chaos`,
+        body: `Heavy snow at ${city.name} has stretched de-icing crews thin and forced cancellations across the board.`,
+        impact: `${city.name} demand −45%, mishap chance +60% for 3 days`,
+      };
+    },
+  },
+
+  // Dense fog (multiple foggy-prone airports)
+  {
+    weight: 6,
+    fire: (state) => {
+      const cityId = pickFrom(FOG_IDS);
+      const city = getCity(cityId);
+      applyDemandMod(cityId, scaledMult(0.80), 1, state.date);
+      applyWeatherHazard(cityId, 1 + scaledDelta(0.25), 1, state.date);
+      return {
+        id: nextId(), date: { ...state.date }, severity: 'bad',
+        headline: `Dense fog blankets ${city.name}`,
+        body: `Visibility at ${city.name} is well below approach minimums for most of the day.`,
+        impact: `${city.name} demand −20%, mishap chance +25% for 1 day`,
+      };
+    },
+  },
+
+  // Heatwave (LF dip, slightly elevated mishap chance from longer takeoff rolls)
+  {
+    weight: 4,
+    fire: (state) => {
+      const cityId = pickFrom(HEATWAVE_IDS);
+      const city = getCity(cityId);
+      applyDemandMod(cityId, scaledMult(0.85), 4, state.date);
+      applyWeatherHazard(cityId, 1 + scaledDelta(0.15), 4, state.date);
+      return {
+        id: nextId(), date: { ...state.date }, severity: 'bad',
+        headline: `Record heatwave grounds afternoon flights in ${city.name}`,
+        body: `Temperatures at ${city.name} are pushing past aircraft performance limits, forcing weight restrictions and delays.`,
+        impact: `${city.name} demand −15%, mishap chance +15% for 4 days`,
+      };
+    },
+  },
+
+  // Ice storm — combo of demand crater + sharp mishap bump
+  {
+    weight: 2,
+    fire: (state) => {
+      const cityId = pickFrom(COLD_WINTER_IDS);
+      const city = getCity(cityId);
+      applyDemandMod(cityId, scaledMult(0.40), 2, state.date);
+      applyWeatherHazard(cityId, 1 + scaledDelta(0.8), 2, state.date);
+      return {
+        id: nextId(), date: { ...state.date }, severity: 'bad',
+        headline: `Ice storm shuts ${city.name}`,
+        body: `Freezing rain has coated runways and aircraft at ${city.name}. Ground handlers can barely keep up.`,
+        impact: `${city.name} demand −60%, mishap chance +80% for 2 days`,
       };
     },
   },
