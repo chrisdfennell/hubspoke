@@ -121,7 +121,9 @@ export class TravelAgencyScene extends RoomScene {
     const rightCol = left + colWidth + 20;
     const activeCity = getCity(state.activeHub);
 
-    // LEFT: open new routes from active hub
+    // LEFT: open new routes from active hub. Sort by distance ascending
+    // so nearest destinations surface first — the catalog order put
+    // Hawaii at the top, which read as nonsensical from e.g. JFK.
     this.addText(left, startY, `New Routes from ${activeCity.name}`, 16, COLORS.accentText);
     let y = startY + 30;
     this.addText(left,       y, 'Destination', 12, COLORS.textDim);
@@ -129,13 +131,16 @@ export class TravelAgencyScene extends RoomScene {
     this.addText(left + 290, y, 'Suggested $', 12, COLORS.textDim);
     y += 20;
 
-    for (const dest of CITIES) {
-      if (dest.id === activeCity.id) continue;
+    const destinations = CITIES
+      .filter(c => c.id !== activeCity.id)
+      .map(c => ({ city: c, dist: distanceKm(activeCity, c) }))
+      .sort((a, b) => a.dist - b.dist);
+
+    for (const { city: dest, dist } of destinations) {
       const already = me.routes.some(r =>
         (r.fromCity === activeCity.id && r.toCity === dest.id) ||
         (r.fromCity === dest.id && r.toCity === activeCity.id)
       );
-      const dist = distanceKm(activeCity, dest);
       const price = suggestedTicketPrice(dist, activeCity.demand, dest.demand);
 
       this.addText(left,       y + 6, dest.name, 13);
