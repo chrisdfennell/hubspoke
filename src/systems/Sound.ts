@@ -66,6 +66,12 @@ class SoundManager {
   /** Setting 0..1; lower than SFX so the loop doesn't fatigue. Saved with
    *  the same localStorage key family as mute so it survives reloads. */
   private musicVolume = 0.35;
+  /** SFX bus sitting between every play() envelope and the master bus.
+   *  Lets the player trim SFX (clicks, takeoff, alerts) independently
+   *  of music. */
+  private sfxGain: GainNode | null = null;
+  /** Setting 0..1; defaults to 1.0 (full SFX). Persisted in localStorage. */
+  private sfxVolume = 1.0;
   /** setTimeout handles for the currently-scheduled music notes. Cleared
    *  by stopMusic so chord/melody scheduling halts. */
   private musicTimers: number[] = [];
@@ -80,6 +86,8 @@ class SoundManager {
     this.muted = localStorage.getItem(MUTE_KEY) === '1';
     const v = parseFloat(localStorage.getItem('airline-tycoon-music-vol') ?? '');
     if (!Number.isNaN(v) && v >= 0 && v <= 1) this.musicVolume = v;
+    const sv = parseFloat(localStorage.getItem('airline-tycoon-sfx-vol') ?? '');
+    if (!Number.isNaN(sv) && sv >= 0 && sv <= 1) this.sfxVolume = sv;
   }
 
   /** Halt music scheduling and suspend the AudioContext so any oscillator
@@ -137,6 +145,14 @@ class SoundManager {
   }
 
   getMusicVolume(): number { return this.musicVolume; }
+
+  setSfxVolume(v: number) {
+    this.sfxVolume = Math.max(0, Math.min(1, v));
+    localStorage.setItem('airline-tycoon-sfx-vol', this.sfxVolume.toString());
+    if (this.sfxGain) this.sfxGain.gain.value = this.sfxVolume;
+  }
+
+  getSfxVolume(): number { return this.sfxVolume; }
 
   private ensureCtx(): AudioContext | null {
     if (this.muted) return null;
@@ -320,7 +336,14 @@ class SoundManager {
     g.gain.setValueAtTime(0, now);
     g.gain.linearRampToValueAtTime(peak, now + 0.005);
     g.gain.exponentialRampToValueAtTime(0.0001, now + durSec);
-    g.connect(this.masterGain!);
+    // Lazy-init the SFX bus on first use so the AudioContext is
+    // guaranteed to exist (ensureCtx already ran in play()).
+    if (!this.sfxGain) {
+      this.sfxGain = ctx.createGain();
+      this.sfxGain.gain.value = this.sfxVolume;
+      this.sfxGain.connect(this.masterGain!);
+    }
+    g.connect(this.sfxGain);
     return g;
   }
 

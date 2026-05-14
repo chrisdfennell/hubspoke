@@ -260,9 +260,19 @@ export function dailyMaintenance() {
 }
 
 /** Drift fuel price slightly each day, with mean-reversion toward FUEL_BASELINE
- *  so a long-running save doesn't random-walk into the ceiling and stay there. */
+ *  so a long-running save doesn't random-walk into the ceiling and stay there.
+ *  Noise amplitude reads from `settings.fuelVolatility` so players can tune
+ *  out random fuel swings entirely or amplify them for more eventful runs. */
 export function driftFuelPrice() {
-  const noise = (Math.random() - 0.5) * 0.02;        // ±$0.01/day random walk
+  const state = GameState.get();
+  const noiseAmpByMode: Record<string, number> = {
+    off: 0,
+    low: 0.01,    // ±$0.005/day
+    normal: 0.02, // ±$0.01/day — the historical default
+    high: 0.04,   // ±$0.02/day
+  };
+  const amp = noiseAmpByMode[state.settings.fuelVolatility] ?? 0.02;
+  const noise = (Math.random() - 0.5) * amp;
   const reversion = (FUEL_BASELINE - fuelPrice) * 0.04; // pulls 4% toward baseline daily
   fuelPrice = clampFuel(fuelPrice + noise + reversion);
 }

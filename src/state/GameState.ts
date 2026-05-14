@@ -62,6 +62,18 @@ export interface GameSettings {
    *  tab is hidden or in the background. Off (default) matches typical
    *  browser-game behavior: tab away and the world pauses + music stops. */
   runInBackground: boolean;
+  /** When true, buying a new plane auto-hires a pilot + mechanic if the
+   *  fleet would otherwise be understaffed. Hire cost is charged to
+   *  cash, same as a manual hire. */
+  autoHireCrew: boolean;
+  /** Amplitude of the daily fuel-price drift. Off freezes fuel-price
+   *  entirely (mean-reversion still applies as a one-time pull); low /
+   *  normal / high scale the daily noise. */
+  fuelVolatility: 'off' | 'low' | 'normal' | 'high';
+  /** Confirmation modal threshold for plane purchases. 'never' suppresses
+   *  the confirm entirely; otherwise the modal fires for purchases at or
+   *  above the chosen $ threshold. */
+  confirmPurchaseAt: 'never' | '10m' | '50m' | '100m';
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -79,6 +91,9 @@ export const DEFAULT_SETTINGS: GameSettings = {
   showWeeklyPaper: true,
   showInterventions: true,
   runInBackground: false,
+  autoHireCrew: false,
+  fuelVolatility: 'normal',
+  confirmPurchaseAt: '50m',
 };
 
 /** Bump when a backwards-incompatible balance change ships. The migrator in

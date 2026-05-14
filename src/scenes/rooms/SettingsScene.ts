@@ -115,6 +115,37 @@ export class SettingsScene extends RoomScene {
     });
     y += 56;
 
+    // -- SFX volume --
+    const sfxVol = sound.getSfxVolume();
+    const sfxLabel =
+      sfxVol === 0 ? 'Off'
+      : sfxVol < 0.4 ? 'Low'
+      : sfxVol < 0.8  ? 'Medium'
+      : 'High';
+    this.addText(left, y, `Sound effects: ${sfxLabel}`, 14);
+    this.addText(left + 8, y + 22,
+      'Clicks, buys, takeoffs, alerts. Trim independently of music; mute (speaker icon) still silences everything.',
+      11, COLORS.textDim);
+    const sfxPresets: Array<{ label: string; value: number }> = [
+      { label: 'Off',    value: 0    },
+      { label: 'Low',    value: 0.30 },
+      { label: 'Medium', value: 0.60 },
+      { label: 'High',   value: 1.00 },
+    ];
+    this.addPresetRow(rightEdge, y + 14, sfxPresets.length, (i) => {
+      const p = sfxPresets[i];
+      const isActive = Math.abs(sfxVol - p.value) < 0.01;
+      return {
+        label: p.label,
+        active: isActive,
+        onClick: () => {
+          sound.setSfxVolume(p.value);
+          this.rebuild();
+        },
+      };
+    });
+    y += 56;
+
     // -- Replay intro cinematic --
     this.addText(left, y, 'Cinematic intro', 14);
     this.addText(left + 8, y + 22,
@@ -155,6 +186,68 @@ export class SettingsScene extends RoomScene {
       settings.runInBackground = next;
       saveNow();
       this.rebuild();
+    });
+    y += 56;
+
+    // -- Auto-hire crew on plane purchase --
+    this.addText(left, y, 'Auto-hire crew on plane purchase', 14);
+    this.addText(left + 8, y + 22,
+      'Buying a plane that would leave you under-staffed auto-hires a pilot + mechanic at the standard rate. Cash is charged like a manual hire.',
+      11, COLORS.textDim);
+    this.addToggle(rightEdge, y + 8, settings.autoHireCrew, (next) => {
+      settings.autoHireCrew = next;
+      saveNow();
+      this.rebuild();
+    });
+    y += 56;
+
+    // -- Confirm large purchases at $ threshold --
+    this.addText(left, y, 'Confirm purchase at', 14);
+    this.addText(left + 8, y + 22,
+      'Show a confirmation modal when buying a plane (new or used) at or above this price. "Never" disables the modal entirely.',
+      11, COLORS.textDim);
+    const confirmPresets: Array<{ label: string; value: typeof settings.confirmPurchaseAt }> = [
+      { label: '$10M',  value: '10m'   },
+      { label: '$50M',  value: '50m'   },
+      { label: '$100M', value: '100m'  },
+      { label: 'Never', value: 'never' },
+    ];
+    this.addPresetRow(rightEdge, y + 14, confirmPresets.length, (i) => {
+      const p = confirmPresets[i];
+      return {
+        label: p.label,
+        active: settings.confirmPurchaseAt === p.value,
+        onClick: () => {
+          settings.confirmPurchaseAt = p.value;
+          saveNow();
+          this.rebuild();
+        },
+      };
+    });
+    y += 56;
+
+    // -- Fuel-price volatility --
+    this.addText(left, y, `Fuel-price volatility: ${settings.fuelVolatility}`, 14);
+    this.addText(left + 8, y + 22,
+      'How much fuel price drifts each day. Off freezes price (mean-reversion only); High swings ±$0.02/day for eventful runs.',
+      11, COLORS.textDim);
+    const fuelPresets: Array<{ label: string; value: typeof settings.fuelVolatility }> = [
+      { label: 'Off',    value: 'off'    },
+      { label: 'Low',    value: 'low'    },
+      { label: 'Normal', value: 'normal' },
+      { label: 'High',   value: 'high'   },
+    ];
+    this.addPresetRow(rightEdge, y + 14, fuelPresets.length, (i) => {
+      const p = fuelPresets[i];
+      return {
+        label: p.label,
+        active: settings.fuelVolatility === p.value,
+        onClick: () => {
+          settings.fuelVolatility = p.value;
+          saveNow();
+          this.rebuild();
+        },
+      };
     });
     y += 56;
 

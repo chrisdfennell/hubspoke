@@ -14,10 +14,20 @@ import { makePlaneIcon } from '../../ui/PlaneIcon';
 import { liveryAccent } from '../../state/upgrades';
 import { sellPlane, buyUsedPlane, sellPriceFor, UsedPlaneListing, LISTING_DAYS } from '../../systems/UsedMarket';
 import { dateToDay } from '../../state/demandModifiers';
+import { GameSettings } from '../../state/GameState';
+import { hirePilot, hireMechanic, staffShortfall, PILOT_HIRE_COST, MECHANIC_HIRE_COST } from '../../systems/Personnel';
 
-/** Threshold above which buying a plane prompts a confirmation modal —
- *  a B747 / A380 misclick is real money down the drain otherwise. */
-const BIG_PURCHASE_THRESHOLD = 50_000_000;
+/** Translate the `confirmPurchaseAt` setting into a $ threshold for the
+ *  Workshop buy + used-buy confirmation modal. `never` suppresses the
+ *  modal entirely by returning Infinity (no purchase ever exceeds it). */
+function bigPurchaseThreshold(settings: GameSettings): number {
+  switch (settings.confirmPurchaseAt) {
+    case 'never': return Infinity;
+    case '10m':   return 10_000_000;
+    case '50m':   return 50_000_000;
+    case '100m':  return 100_000_000;
+  }
+}
 
 type WorkshopTab = 'buy' | 'used' | 'fleet';
 
@@ -155,6 +165,7 @@ export class WorkshopScene extends RoomScene {
         state.stats.planesBought++;
         state.pushNews(`${me.name} purchased a ${m.name} (${plane.name}) at ${getCity(home).name}.`);
         sound.play('buy');
+        this.maybeAutoHireCrew();
         this.rebuild();
       };
       const btn = new Button({
@@ -167,9 +178,10 @@ export class WorkshopScene extends RoomScene {
         onClick: () => {
           if (me.cash < m.price) return;
           // Confirm modal for big purchases — a B747 misclick is $240M down
-          // the drain otherwise. Cheaper planes (Cessna, ATR) skip the
-          // confirm so the early game doesn't feel naggy.
-          if (m.price >= BIG_PURCHASE_THRESHOLD) {
+          // the drain otherwise. The threshold is settings-controlled now;
+          // 'never' returns Infinity from bigPurchaseThreshold so the modal
+          // never fires.
+          if (m.price >= bigPurchaseThreshold(state.settings)) {
             Modal.confirm(this, {
               title: 'Confirm purchase',
               message: `Buy a ${m.name} for ${formatMoney(m.price)}?\nCash after purchase: ${formatMoney(me.cash - m.price)}.`,
@@ -342,6 +354,27 @@ export class WorkshopScene extends RoomScene {
     }
   }
 
+  /** When the autoHireCrew setting is on, hire any missing pilots +
+   *  mechanics to crew the freshly-bought plane(s). Charges from cash
+   *  via the standard hire functions so payroll, morale bumps, and
+   *  crew counts all stay consistent with manual hires. Silently
+   *  no-ops when cash runs out partway — the player can finish
+   *  hiring manually in Personnel. */
+  private maybeAutoHireCrew() {
+    const state = GameState.get();
+    if (!state.settings.autoHireCrew) return;
+    const me = state.human;
+    while (staffShortfall(me) > 0 && me.cash >= PILOT_HIRE_COST + MECHANIC_HIRE_COST) {
+      const beforePilots = me.pilots;
+      const beforeMechs = me.mechanics;
+      if (me.pilots < me.planes.length && me.cash >= PILOT_HIRE_COST) hirePilot(me);
+      if (me.mechanics < me.planes.length && me.cash >= MECHANIC_HIRE_COST) hireMechanic(me);
+      // Break out if neither hire succeeded (cash floor hit between
+      // checks) — avoids an infinite loop.
+      if (beforePilots === me.pilots && beforeMechs === me.mechanics) break;
+    }
+  }
+
   /** One row of the used-plane market — silhouette, condition bar,
    *  source label, ask price, days listed, and a Buy button (disabled
    *  if the player can't afford it). */
@@ -379,12 +412,13 @@ export class WorkshopScene extends RoomScene {
             state.pushNews(`${me.name} bought a used ${model.name} for ${formatMoney(listing.askPrice)} (${Math.round(listing.condition * 100)}% condition).`);
             state.stats.planesBought++;
             sound.play('buy');
+            this.maybeAutoHireCrew();
             this.rebuild();
           }
         };
         // Re-use the new-plane big-purchase guardrail so a $100M used 747
         // misclick still asks before draining the bank.
-        if (listing.askPrice >= BIG_PURCHASE_THRESHOLD) {
+        if (listing.askPrice >= bigPurchaseThreshold(state.settings)) {
           Modal.confirm(this, {
             title: 'Confirm used purchase',
             message: `Buy used ${model.name} (${Math.round(listing.condition * 100)}% condition) for ${formatMoney(listing.askPrice)}?\nRepair cost to bring to full condition: ${formatMoney(Math.round((1 - listing.condition) * model.price * 0.01))}.`,

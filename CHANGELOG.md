@@ -9,6 +9,57 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-14 (later) — Four new Settings toggles
+
+Filling in long-standing items from the Settings roadmap.
+
+### Auto-hire crew on plane purchase
+
+Default off. When on, buying a plane (new or used) that would leave
+you understaffed auto-hires the missing pilot + mechanic at the
+standard rate ($8K / $4K). Cash is charged like a manual hire, so
+all the downstream consequences (morale +2, payroll growth) stay
+identical. Stops if cash runs out mid-loop — you can finish hiring
+manually in Personnel.
+
+### Confirm purchase at $ threshold
+
+The big-purchase confirm modal used to fire at a hardcoded $50M.
+Now settings-controlled: `$10M / $50M (default) / $100M / Never`.
+
+"Never" returns `Infinity` from the threshold helper so the modal
+literally cannot fire. Useful late-game when every plane purchase
+is a $200M+ widebody and the modal turns into spam.
+
+### Fuel-price volatility
+
+The daily fuel-price random walk amplitude is now a knob:
+
+| Setting | Daily noise |
+|---|---|
+| Off | ±0 (mean-reversion only) |
+| Low | ±$0.005 |
+| Normal | ±$0.01 (the historical default) |
+| High | ±$0.02 |
+
+Mean reversion toward `FUEL_BASELINE` ($0.80) still applies at the
+same 4%/day rate regardless of setting. "Off" freezes price near
+baseline; "High" gives runs more volatile fuel-driven margin swings.
+
+### SFX volume
+
+Music and SFX share the master gain but didn't have separate trim.
+New `sfxGain` bus between every `envelope()` and the master, with a
+matching `Sound effects: Off / Low / Medium / High` preset row in
+Settings (same shape as the music volume row). Volume is persisted
+in localStorage under `airline-tycoon-sfx-vol`.
+
+The top-right mute toggle still silences everything as before — the
+SFX slider trims sound effects without touching music, and vice
+versa.
+
+---
+
 ## 2026-05-14 — Charter contracts + 4 new planes
 
 ### Passenger charters
