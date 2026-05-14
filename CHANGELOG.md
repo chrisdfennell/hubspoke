@@ -9,6 +9,72 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-14 (later 6) — In-flight retail (ancillary revenue)
+
+Every revenue flight now earns ancillary revenue on top of ticket
+sales — bag fees, snacks, food + drink, paid Wi-Fi. The amount per
+passenger depends on what cabin/entertainment upgrades the plane has
+installed, giving the Workshop outfit decisions a second revenue
+dimension on top of the existing load-factor boost.
+
+### Mechanic
+
+```
+ancillary = passengers × planeAncillaryPerPax(upgrades)
+revenue   = (passengers × ticketPrice) + ancillary
+```
+
+`planeAncillaryPerPax` starts from `ANCILLARY_BASE_PER_PAX = $8` and
+stacks any installed interior + entertainment upgrades.
+
+### Per-upgrade ancillary
+
+Added to existing upgrade catalog entries (alongside the existing LF
+bonus):
+
+| Upgrade | + $/pax |
+|---|---|
+| Premium Seats | +$3 |
+| Business Cabin | +$8 |
+| Lie-Flat Suites | +$15 |
+| Onboard Wi-Fi | +$2 |
+| Seat-back AVOD | +$4 |
+| Streaming Suite | +$7 |
+
+Maxed-out passenger plane (lie-flat + streaming + base) = $30/pax
+of ancillary revenue per flight. For a 354-pax B747 at 85% LF,
+that's $10,620 extra per flight (~3% boost on a typical $354K
+ticket revenue at long-haul fares).
+
+For an early-game Cessna (11 pax, $8 base, no upgrades), that's
+$88 extra per flight (~11% boost on $770 ticket revenue) — meaningful
+help when starting out, but not balance-breaking.
+
+### Wire-through
+
+- `state/upgrades.ts` — added `ancillaryPerPax?: number` to the
+  `Upgrade` interface, `ANCILLARY_BASE_PER_PAX` constant, and
+  `planeAncillaryPerPax(upgrades)` helper. Updated existing entries.
+- `systems/Economy.flightProfit` — return type adds `ticketRevenue`
+  and `ancillary` line items (backward-compatible additive change);
+  the existing `revenue` field includes ancillary so ops/share-of-
+  revenue calculations see the full bottom line.
+- `WorkshopScene` Outfit view — each upgrade row now shows `+$N/pax`
+  alongside the existing `+N% LF` and `+N rep/flight` columns.
+
+### Symmetric for AI
+
+`flightProfit` runs for every player's flights — AI rivals earn
+ancillary too. Since `aiBuyUpgrades` already targets interior +
+entertainment, AI rivals benefit from this organically. No extra
+AI plumbing needed.
+
+Charters and cargo deliberately don't get ancillary: charters
+already pay a 1.5× premium over fair fare, and cargo has no
+passengers.
+
+---
+
 ## 2026-05-14 (later 5) — Weather events
 
 Six new weather-event blueprints, each pairing a demand drop with a

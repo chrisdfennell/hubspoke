@@ -17,11 +17,21 @@ export interface Upgrade {
   /** Reputation gained per successful (revenue) arrival. Fractions ok —
    *  they accumulate across many flights. */
   reputationPerFlight?: number;
+  /** Per-passenger ancillary revenue bonus (in dollars). Stacked with the
+   *  base ancillary revenue (bag fees + basic snacks) every revenue flight
+   *  earns. Premium cabins push food/drinks at higher margin; entertainment
+   *  upgrades push WiFi + content fees. */
+  ancillaryPerPax?: number;
   /** Livery-only: secondary color painted on the tail fin so each livery
    *  reads distinctly on the apron. Falls back to the airline base color
    *  when unset. */
   accentColor?: number;
 }
+
+/** Baseline ancillary revenue earned per passenger on every revenue flight
+ *  (bag fees, basic snacks, paid Wi-Fi pass-throughs). Premium cabins +
+ *  entertainment upgrades stack on top. */
+export const ANCILLARY_BASE_PER_PAX = 8;
 
 export const UPGRADES: Upgrade[] = [
   // ---- Livery (paint scheme — cosmetic identity + small reputation drip)
@@ -40,24 +50,24 @@ export const UPGRADES: Upgrade[] = [
 
   // ---- Interior (seating — primary load-factor driver)
   { id: 'premium-seats',   category: 'interior', name: 'Premium Seats',   price: 180_000,
-    loadFactorBonus: 0.05,
+    loadFactorBonus: 0.05, ancillaryPerPax: 3,
     description: '+2 inches of legroom, recliners in every row.' },
   { id: 'business-cabin',  category: 'interior', name: 'Business Cabin',  price: 550_000,
-    loadFactorBonus: 0.10,
+    loadFactorBonus: 0.10, ancillaryPerPax: 8,
     description: 'Convertible business cabin with USB-C at every seat.' },
   { id: 'flat-bed-suites', category: 'interior', name: 'Lie-Flat Suites', price: 1_200_000,
-    loadFactorBonus: 0.16,
+    loadFactorBonus: 0.16, ancillaryPerPax: 15,
     description: 'Top-tier lie-flat suites. Pays off on long-haul.' },
 
   // ---- Entertainment (smaller LF bump but cheaper)
   { id: 'wifi',            category: 'entertainment', name: 'Onboard Wi-Fi',    price:  90_000,
-    loadFactorBonus: 0.03,
+    loadFactorBonus: 0.03, ancillaryPerPax: 2,
     description: 'Free in-flight internet. Business travelers expect it now.' },
   { id: 'avod',            category: 'entertainment', name: 'Seat-back AVOD',   price: 240_000,
-    loadFactorBonus: 0.06,
+    loadFactorBonus: 0.06, ancillaryPerPax: 4,
     description: 'On-demand video at every seat. Hides the boredom on long hops.' },
   { id: 'streaming-suite', category: 'entertainment', name: 'Streaming Suite',  price: 480_000,
-    loadFactorBonus: 0.09,
+    loadFactorBonus: 0.09, ancillaryPerPax: 7,
     description: 'Cast to your own device + premium service partnerships.' },
 ];
 
@@ -82,6 +92,20 @@ export function planeReputationPerFlight(upgrades: PlaneUpgrades): number {
   for (const cat of ['livery', 'interior', 'entertainment'] as const) {
     const u = upgrades[cat] ? getUpgrade(upgrades[cat] as string) : undefined;
     if (u?.reputationPerFlight) total += u.reputationPerFlight;
+  }
+  return total;
+}
+
+/** Total per-passenger ancillary revenue ($) a plane earns per flight,
+ *  starting from `ANCILLARY_BASE_PER_PAX` and stacking the interior +
+ *  entertainment upgrades the plane has installed. Multiplied by
+ *  passenger count in Economy.flightProfit to produce ancillary
+ *  revenue on top of ticket revenue. */
+export function planeAncillaryPerPax(upgrades: PlaneUpgrades): number {
+  let total = ANCILLARY_BASE_PER_PAX;
+  for (const cat of ['interior', 'entertainment'] as const) {
+    const u = upgrades[cat] ? getUpgrade(upgrades[cat] as string) : undefined;
+    if (u?.ancillaryPerPax) total += u.ancillaryPerPax;
   }
   return total;
 }

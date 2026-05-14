@@ -541,10 +541,13 @@ export class WorkshopScene extends RoomScene {
         if (u.loadFactorBonus) {
           this.addText(left + 300, y, `+${Math.round(u.loadFactorBonus * 100)}% LF`, 12, COLORS.textDim);
         }
-        if (u.reputationPerFlight) {
-          this.addText(left + 380, y, `+${u.reputationPerFlight.toFixed(2)} rep/flight`, 12, COLORS.textDim);
+        if (u.ancillaryPerPax) {
+          this.addText(left + 370, y, `+$${u.ancillaryPerPax}/pax`, 12, COLORS.textDim);
         }
-        this.addText(left + 540, y + 2, u.description, 11, COLORS.textDim);
+        if (u.reputationPerFlight) {
+          this.addText(left + 450, y, `+${u.reputationPerFlight.toFixed(2)} rep/flight`, 12, COLORS.textDim);
+        }
+        this.addText(left + 560, y + 2, u.description, 11, COLORS.textDim);
 
         const btn = new Button({
           scene: this,

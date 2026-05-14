@@ -3,7 +3,7 @@ import { Plane } from '../state/Plane';
 import { Route } from '../state/Route';
 import { getCity, getPlaneModel, DEFAULT_AIRLINES, HOME_AIRPORT } from '../state/catalog';
 import { getDemandMult } from '../state/demandModifiers';
-import { planeLoadFactorBonus } from '../state/upgrades';
+import { planeLoadFactorBonus, planeAncillaryPerPax } from '../state/upgrades';
 import { moraleLoadFactorMult } from './Personnel';
 import { clock } from './Clock';
 
@@ -117,8 +117,18 @@ export function expectedLoadFactor(route: Route): number {
   return Math.max(0.02, Math.min(0.95, lf));
 }
 
-/** Revenue minus fuel and per-flight ops for one one-way flight. */
-export function flightProfit(plane: Plane, route: Route): { revenue: number; fuel: number; ops: number; profit: number; passengers: number } {
+/** Revenue minus fuel and per-flight ops for one one-way flight. `revenue`
+ *  is ticket revenue + ancillary revenue; `ancillary` is broken out so
+ *  tooltips can show it as a separate line item. */
+export function flightProfit(plane: Plane, route: Route): {
+  revenue: number;
+  ticketRevenue: number;
+  ancillary: number;
+  fuel: number;
+  ops: number;
+  profit: number;
+  passengers: number;
+} {
   let lf = expectedLoadFactor(route);
   // The human's "wait for plane to fill" threshold acts as a floor on the
   // load factor of dispatched flights. The dispatcher already gates takeoffs
@@ -139,7 +149,13 @@ export function flightProfit(plane: Plane, route: Route): { revenue: number; fue
   if (owner) lf *= moraleLoadFactorMult(owner.morale);
   lf = Math.min(1, lf);
   const passengers = Math.floor(plane.model.seats * lf);
-  const revenue = passengers * route.ticketPrice;
+  const ticketRevenue = passengers * route.ticketPrice;
+  // Ancillary: bag fees + basic snacks ($8/pax baseline) + cabin/entertainment
+  // upgrade kickers ($2-15/pax). Stacked into revenue so ops/share-of-revenue
+  // sees the full bottom line — bag fees count toward the "small share of
+  // revenue" ops cost just like ticket revenue does.
+  const ancillary = passengers * planeAncillaryPerPax(plane.upgrades);
+  const revenue = ticketRevenue + ancillary;
   const fuel = fuelCost(plane, route.distanceKm);
   // Per-flight ops: gate fees, ground handling, catering, cleaning. Scales
   // with passengers carried (catering/cleaning) plus a fixed turn cost and a
@@ -147,7 +163,7 @@ export function flightProfit(plane: Plane, route: Route): { revenue: number; fue
   // where a Cessna may pull only 4-6 pax against 3+ rivals.
   const ops = 50 + passengers * 4 + Math.round(revenue * 0.015);
   const profit = revenue - fuel - ops;
-  return { revenue, fuel, ops, profit, passengers };
+  return { revenue, ticketRevenue, ancillary, fuel, ops, profit, passengers };
 }
 
 /**
