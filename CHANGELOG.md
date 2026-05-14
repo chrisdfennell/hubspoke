@@ -9,6 +9,28 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-14 (tune) — Rested-crew threshold bumped
+
+**Reported**: with 4 planes and 6 pilots, utilization showed 67%
+(balanced) — but two extra pilots over fleet size should read as
+"rested" with surplus crew slack.
+
+Old threshold: `< 0.5` for rested (i.e., 2× more pilots than flying
+planes). That bar was unrealistically high — real airlines run
+~80% pilot utilization, so anything sub-70% should already feel
+slack.
+
+New threshold: `< 0.7` for rested. So 67% utilization now reads
+"rested (+2 morale/day)" instead of "balanced (no change)." The
+band `0.7..1.0` is still "balanced" — that's close to 1:1
+crew-to-active-planes, which is "fully employed but not
+overworked." Overworked thresholds unchanged.
+
+Net effect: surplus crew now actually pays off in steady morale
+growth, which was the intent of the morale system.
+
+---
+
 ## 2026-05-14 (later) — Four new Settings toggles
 
 Filling in long-standing items from the Settings roadmap.

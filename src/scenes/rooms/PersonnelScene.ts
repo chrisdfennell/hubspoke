@@ -42,7 +42,7 @@ export class PersonnelScene extends RoomScene {
     const util = crewUtilization(me);
     const utilLabel = util > 1.5 ? 'severely overworked'
                     : util > 1.0 ? 'overworked'
-                    : util < 0.5 ? 'rested'
+                    : util < 0.7 ? 'rested'
                     : 'balanced';
     this.addText(left, y, 'Crew morale', 18, COLORS.accentText);
     y += 26;

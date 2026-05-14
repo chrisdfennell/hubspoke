@@ -107,8 +107,9 @@ export function applyDailyMorale() {
     let delta = 0;
     if (u > 1.5) delta -= MORALE_SEVERE_HIT;
     else if (u > 1.0) delta -= MORALE_OVERWORK_HIT;
-    else if (u < 0.5) delta += MORALE_REST_GAIN;
-    // No-op in the balanced band (0.5..1.0) — small natural neutral zone.
+    else if (u < 0.7) delta += MORALE_REST_GAIN;
+    // No-op in the balanced band (0.7..1.0) — close to 1:1 crew-to-
+    // active-planes is "fully employed" but not overworked.
     p.morale = Math.max(0, Math.min(100, p.morale + delta));
 
     // Resignation: when morale is critically low a crew member packs up
