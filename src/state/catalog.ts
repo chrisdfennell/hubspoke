@@ -337,6 +337,7 @@ export const CITIES: CityData[] = [
   { id: 'clt', name: 'Charlotte',    country: 'USA',     lat: 35.21, lon:  -80.94, demand: 1.2 },
   { id: 'iad', name: 'Washington Dulles',country:'USA', lat: 38.95, lon:  -77.46, demand: 1.2 },
   { id: 'phl', name: 'Philadelphia', country: 'USA',     lat: 39.87, lon:  -75.24, demand: 1.2 },
+  { id: 'pit', name: 'Pittsburgh',   country: 'USA',     lat: 40.49, lon:  -80.23, demand: 1.0 },
   { id: 'ewr', name: 'Newark',       country: 'USA',     lat: 40.69, lon:  -74.17, demand: 1.3 },
   { id: 'phx', name: 'Phoenix',      country: 'USA',     lat: 33.43, lon: -112.01, demand: 1.2 },
   { id: 'mco', name: 'Orlando',      country: 'USA',     lat: 28.43, lon:  -81.31, demand: 1.2 },
