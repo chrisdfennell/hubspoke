@@ -9,6 +9,55 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-14 (later 7) — Creative mode
+
+A new 5th difficulty added to the picker — the no-friction sandbox.
+
+### Tagline
+
+> Creative — No pressure. No rivals. Build whatever you want.
+
+### What's different
+
+**Starting conditions**:
+- $1,000,000,000 starting cash (enough to buy every plane in the
+  catalog with change to spare).
+- 50 pilots / 50 mechanics on payroll.
+- Loan APR multiplier 0× (interest-free borrowing if you bother).
+- Required monthly principal: 0% (no creditor risk).
+
+**No pressure systems**:
+- AI rivals: `aiDailyTurn` early-returns in Creative — rivals sit
+  dormant at their starting hub, never expand, never buy planes,
+  never bid sponsors/cargo, never sabotage, never trade stocks.
+- Random events: `eventChance: 0` — no oil shocks, no hurricanes,
+  no tourism booms, no scandals.
+- Crashes & incidents: `maybeMishap` early-returns when
+  `difficulty === 'creative'` — neglected planes don't crash; you
+  can fly a 5%-condition plane forever without consequence.
+
+**What still works**:
+- All of the room scenes, contracts, upgrades, hubs, achievements.
+- Cargo + charter delivery still credits stats and pays out.
+- Time progression, day cycles, weather cosmetics (just no
+  mechanical impact).
+- Save/load, music, sound, settings.
+
+### Where to find it
+
+New game → Choose Difficulty: **Creative** is the first card,
+above Easy. Panel was bumped from 460 → 560px to fit the 5th row.
+
+Difficulty card order: Creative → Easy → Normal → Hard → Brutal.
+
+### What's next: Campaign mode
+
+Coming separately. Creative is the "screw around with everything"
+mode; Campaign will be the "scripted scenarios with win/lose
+conditions" mode. They're complementary.
+
+---
+
 ## 2026-05-14 (later 6) — In-flight retail (ancillary revenue)
 
 Every revenue flight now earns ancillary revenue on top of ticket

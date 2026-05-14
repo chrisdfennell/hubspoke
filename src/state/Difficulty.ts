@@ -4,7 +4,7 @@
  * loading the same slot keeps the chosen difficulty.
  */
 
-export type Difficulty = 'easy' | 'normal' | 'hard' | 'brutal';
+export type Difficulty = 'creative' | 'easy' | 'normal' | 'hard' | 'brutal';
 
 export interface DifficultySettings {
   /** $ on day 1. */
@@ -47,6 +47,23 @@ export interface DifficultySettings {
 }
 
 export const DIFFICULTIES: Record<Difficulty, DifficultySettings> = {
+  creative: {
+    label: 'Creative',
+    tagline: 'No pressure. No rivals. Build whatever you want.',
+    startCash:        1_000_000_000, // $1B — enough to buy the whole catalog
+    startPilots:      50,
+    startMechanics:   50,
+    aiBuyChance:      0,
+    aiStockBudgetMult:0,
+    aiSabotageChance: 0,
+    aiCargoMaxPerDay: 0,
+    aiCargoMinMargin: 1.0,            // AI requires impossibly thick margins
+    aiSellOvervalueThreshold: 99,     // AI never sells stock
+    loanAprMult:      0,              // Interest-free if you do borrow
+    eventChance:      0,              // No random/weather events
+    requiredPrincipalPct: 0,
+    requiredPrincipalMin: 0,
+  },
   easy: {
     label: 'Easy',
     tagline: 'Generous starting cash. Sleepy rivals. Forgiving rates.',

@@ -139,11 +139,14 @@ export function dispatchIdlePlanes() {
  */
 function maybeMishap(player: Player, plane: Plane, passengers: number, destinationCityId: string) {
   if (plane.condition >= 0.5) return;
+  const state = GameState.get();
+  // Creative mode is a no-friction sandbox — crashes / incidents never
+  // fire regardless of plane condition or weather.
+  if (state.difficulty === 'creative') return;
   // Linear ramp from 0% chance at cond=0.5 to 20% at cond=0.0. Morale
   // amplifies — overworked, low-morale crews miss problems that would
   // otherwise be caught pre-flight. Weather at the destination piles
   // on top (storm/hurricane multiply the chance further).
-  const state = GameState.get();
   let failChance = (0.5 - plane.condition) * 0.4;
   failChance *= moraleMishapMult(player.morale);
   failChance *= getHazardMult(destinationCityId, state.date);

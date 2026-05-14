@@ -285,9 +285,9 @@ export class BootScene extends Phaser.Scene {
     const overlay = this.add.container(0, 0).setDepth(50);
     overlay.add(this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.7)
       .setOrigin(0).setInteractive());
-    overlay.add(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 720, 460, COLORS.panel)
+    overlay.add(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 720, 560, COLORS.panel)
       .setStrokeStyle(2, COLORS.panelBorder));
-    overlay.add(this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 200, 'Choose Difficulty', {
+    overlay.add(this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 250, 'Choose Difficulty', {
       fontFamily: 'Segoe UI, Tahoma, sans-serif',
       fontSize: '22px',
       color: COLORS.accentText,
@@ -296,8 +296,10 @@ export class BootScene extends Phaser.Scene {
 
     const cardW = 660;
     const cardH = 78;
-    const startY = GAME_HEIGHT / 2 - 150;
-    const order: Difficulty[] = ['easy', 'normal', 'hard', 'brutal'];
+    const startY = GAME_HEIGHT / 2 - 200;
+    // Creative first since it's the lowest-friction option; the four real
+    // difficulties run easy → brutal after it.
+    const order: Difficulty[] = ['creative', 'easy', 'normal', 'hard', 'brutal'];
     order.forEach((d, i) => {
       const cy = startY + i * (cardH + 8);
       const cfg = DIFFICULTIES[d];
@@ -337,7 +339,7 @@ export class BootScene extends Phaser.Scene {
     const cancelBtn = new Button({
       scene: this,
       x: GAME_WIDTH / 2,
-      y: GAME_HEIGHT / 2 + 200,
+      y: GAME_HEIGHT / 2 + 250,
       width: 120, height: 32,
       label: 'Cancel',
       onClick: () => overlay.destroy(true),

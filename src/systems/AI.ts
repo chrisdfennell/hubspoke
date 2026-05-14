@@ -38,6 +38,9 @@ import { takeLoan, repayLoan, creditLimit } from './Bank';
  */
 export function aiDailyTurn() {
   const state = GameState.get();
+  // Creative mode skips AI behavior entirely — rivals sit dormant at
+  // their starting hub. Player has the whole world to themselves.
+  if (state.difficulty === 'creative') return;
   for (const player of state.players) {
     if (!player.isAI) continue;
     if (state.takenOverBy[player.id]) continue; // eliminated rivals don't act
