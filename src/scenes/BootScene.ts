@@ -9,6 +9,7 @@ import { registerBankHooks } from '../systems/Bank';
 import { registerPersonnelHooks } from '../systems/Personnel';
 import { registerEventHooks } from '../systems/Events';
 import { registerCargoHooks, refreshOffers } from '../systems/Cargo';
+import { registerCharterHooks, refreshCharterOffers } from '../systems/Charters';
 import { registerUsedMarketHooks, refreshUsedMarket } from '../systems/UsedMarket';
 import { registerSabotageHooks } from '../systems/Sabotage';
 import { registerLoungeHooks, refreshContacts } from '../systems/Lounge';
@@ -45,6 +46,7 @@ export class BootScene extends Phaser.Scene {
     registerPersonnelHooks();
     registerEventHooks();
     registerCargoHooks();
+    registerCharterHooks();
     registerUsedMarketHooks();
     registerSabotageHooks();
     registerLoungeHooks();
@@ -589,6 +591,7 @@ export class BootScene extends Phaser.Scene {
     // past the tutorial goalposts (flights flown). Fresh saves still see it.
     maybeAutoDismissForLoadedSave();
     refreshOffers();
+    refreshCharterOffers();
     refreshContacts();
     refreshUsedMarket();
     registerAutoSave();

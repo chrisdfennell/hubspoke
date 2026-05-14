@@ -9,6 +9,7 @@ import { getDifficulty } from '../state/Difficulty';
 import { getCEO } from '../state/ceos';
 import { clock } from './Clock';
 import { acceptContract, dispatchCargo } from './Cargo';
+import { acceptCharter, dispatchCharter } from './Charters';
 import { buyUsedPlane } from './UsedMarket';
 import { hubCost } from '../state/Player';
 import { UPGRADES } from '../state/upgrades';
@@ -80,6 +81,11 @@ export function aiDailyTurn() {
     // Cargo competition: with idle planes, grab profitable contracts off
     // the same shared board the human shops from.
     aiBidCargo(player);
+
+    // Charter competition: passenger one-offs with a premium over fair
+    // fare. Same gating shape as cargo — fleet seat capacity instead
+    // of cargo capacity.
+    aiBidCharter(player);
 
     // Used-plane sniping: cheaper than buying new when a good listing
     // shows up. Rolls at half the aiBuyChance rate so the AI doesn't
@@ -386,6 +392,49 @@ function formatBriefMoney(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
   return `$${Math.round(n)}`;
+}
+
+/**
+ * Same shape as `aiBidCargo` but for passenger charters: filters by
+ * idle planes with enough seats + range, scores by net-of-fuel margin,
+ * accepts up to `aiCargoMaxPerDay` per AI per day. Reuses the cargo
+ * difficulty knobs since charters and cargo are both contract-board
+ * intake — they compete for the same fleet attention.
+ */
+function aiBidCharter(player: Player) {
+  const state = GameState.get();
+  const cfg = getDifficulty(state.difficulty);
+  const fuel = getFuelPrice();
+  let accepted = 0;
+
+  for (const contract of [...state.charterOffers]) {
+    if (accepted >= cfg.aiCargoMaxPerDay) break;
+    if (contract.status !== 'available') continue;
+
+    const from = getCity(contract.fromCity);
+    const to = getCity(contract.toCity);
+    const dist = distanceKm(from, to);
+
+    // Idle planes with enough seats AND range. Sorted by fuel
+    // efficiency so the AI picks the cheapest-to-fly fit.
+    const eligible = player.planes.filter(p => {
+      if (p.status.kind !== 'idle') return false;
+      const m = getPlaneModel(p.modelId);
+      return m.seats >= contract.paxCount && m.range >= dist;
+    }).sort((a, b) => getPlaneModel(a.modelId).fuelPerKm - getPlaneModel(b.modelId).fuelPerKm);
+
+    if (eligible.length === 0) continue;
+    const plane = eligible[0];
+    const here = getCity(plane.status.kind === 'idle' ? plane.status.airportId : player.hubs[0]);
+    const totalDist = distanceKm(here, from) + dist;
+    const fuelCost = totalDist * getPlaneModel(plane.modelId).fuelPerKm * fuel;
+    if (contract.payment - fuelCost < contract.payment * cfg.aiCargoMinMargin) continue;
+    if (player.cash < fuelCost) continue;
+
+    if (!acceptCharter(player, contract.id)) continue;
+    const result = dispatchCharter(player, contract.id, plane.id);
+    if (result.ok) accepted++;
+  }
 }
 
 /**

@@ -7,6 +7,8 @@ import { getFuelPrice, setFuelPrice } from '../systems/Economy';
 import { GameEvent } from '../systems/Events';
 import { snapshotModifiers, restoreModifiers } from './demandModifiers';
 import { CargoContract, getContractCounter, setContractCounter } from '../systems/Cargo';
+import { CharterContract } from './Charter';
+import { getCharterCounter, setCharterCounter } from '../systems/Charters';
 import { UsedPlaneListing, getUsedListingCounter, setUsedListingCounter } from '../systems/UsedMarket';
 import { SponsorContract } from './Sponsor';
 import { Contact, getLoungeCounter, setLoungeCounter } from '../systems/Lounge';
@@ -156,6 +158,11 @@ export interface GameSnapshot {
   cargoActive: CargoContract[];
   cargoCompleted: CargoContract[];
   cargoCounter: number;
+  /** Charter state — passenger-bulk contracts, premium over fair fare. */
+  charterOffers?: CharterContract[];
+  charterActive?: CharterContract[];
+  charterCompleted?: CharterContract[];
+  charterCounter?: number;
   /** Sponsor contracts: available offers, accepted/in-progress, and history. */
   sponsorOffers?: SponsorContract[];
   sponsorActive?: SponsorContract[];
@@ -219,6 +226,12 @@ export class GameState {
   cargoActive: CargoContract[] = [];
   /** Recently delivered or failed cargo contracts. */
   cargoCompleted: CargoContract[] = [];
+  /** Passenger-charter contracts available to accept. */
+  charterOffers: CharterContract[] = [];
+  /** Active charter contracts (accepted, not yet delivered/failed). */
+  charterActive: CharterContract[] = [];
+  /** Recently delivered or failed charter contracts. */
+  charterCompleted: CharterContract[] = [];
   /** Sponsor contracts available to accept. Optional in snapshot for save-compat. */
   sponsorOffers: SponsorContract[] = [];
   /** Sponsor contracts accepted by the human, in progress. */
@@ -295,6 +308,10 @@ export class GameState {
     s.cargoActive = snap.cargoActive ?? [];
     s.cargoCompleted = snap.cargoCompleted ?? [];
     if (typeof snap.cargoCounter === 'number') setContractCounter(snap.cargoCounter);
+    s.charterOffers = snap.charterOffers ?? [];
+    s.charterActive = snap.charterActive ?? [];
+    s.charterCompleted = snap.charterCompleted ?? [];
+    if (typeof snap.charterCounter === 'number') setCharterCounter(snap.charterCounter);
     s.sponsorOffers = snap.sponsorOffers ?? [];
     s.sponsorActive = snap.sponsorActive ?? [];
     s.sponsorCompleted = snap.sponsorCompleted ?? [];
@@ -337,6 +354,10 @@ export class GameState {
       cargoActive: this.cargoActive,
       cargoCompleted: this.cargoCompleted,
       cargoCounter: getContractCounter(),
+      charterOffers: this.charterOffers,
+      charterActive: this.charterActive,
+      charterCompleted: this.charterCompleted,
+      charterCounter: getCharterCounter(),
       sponsorOffers: this.sponsorOffers,
       sponsorActive: this.sponsorActive,
       sponsorCompleted: this.sponsorCompleted,

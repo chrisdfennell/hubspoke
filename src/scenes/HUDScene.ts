@@ -455,13 +455,13 @@ export class HUDScene extends Phaser.Scene {
   /** Fleet breakdown: counts by status, staffing cap, daily payroll burden. */
   private fleetTooltip(): string {
     const me = GameState.get().human;
-    const counts = { idle: 0, flying: 0, cargo: 0, maintenance: 0, ferry: 0 };
+    const counts = { idle: 0, flying: 0, cargo: 0, charter: 0, maintenance: 0, ferry: 0 };
     for (const p of me.planes) counts[p.status.kind]++;
     const cap = Math.min(me.pilots, me.mechanics);
     const shortfall = staffShortfall(me);
     const lines: string[] = [
       `Fleet of ${me.planes.length}:`,
-      `  Idle: ${counts.idle}   Flying: ${counts.flying}   Cargo: ${counts.cargo}   Maint: ${counts.maintenance}`,
+      `  Idle: ${counts.idle}   Flying: ${counts.flying}   Cargo: ${counts.cargo}   Charter: ${counts.charter}   Maint: ${counts.maintenance}`,
       `Crew: ${me.pilots} pilots, ${me.mechanics} mechanics  (cap ${cap})`,
     ];
     if (shortfall > 0) lines.push(`⚠ ${shortfall} plane(s) grounded — hire crew in Personnel`);

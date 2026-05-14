@@ -380,6 +380,8 @@ export function planeStatusText(plane: Plane, route: Route | undefined): string 
       return `Flying ${status.from.toUpperCase()} → ${status.to.toUpperCase()}`;
     case 'cargo':
       return `Cargo ${status.from.toUpperCase()} → ${status.to.toUpperCase()}`;
+    case 'charter':
+      return `Charter ${status.from.toUpperCase()} → ${status.to.toUpperCase()}`;
     case 'maintenance':
       return `In maintenance @ ${status.airportId.toUpperCase()}`;
     case 'ferry':

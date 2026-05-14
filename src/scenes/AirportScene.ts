@@ -42,7 +42,7 @@ export class AirportScene extends Phaser.Scene {
     { id: 'stocks',   sceneKey: 'StocksScene',       name: 'Stock Market',   rect: { x: 390, y: 260, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Trade airline shares',             available: true, icon: '📊' },
     { id: 'tower',    sceneKey: 'WorldMapScene',     name: 'Control Tower',  rect: { x: 650, y: 260, w: 240, h: 130 }, color: 0x355a7d, desc: 'Live world map of all flights',    available: true, icon: '🌐' },
     { id: 'news',     sceneKey: 'NewsScene',         name: 'News Stand',     rect: { x: 910, y: 260, w: 240, h: 130 }, color: 0x355a7d, desc: 'Industry news and rumors',         available: true, icon: '📰' },
-    { id: 'cargo',    sceneKey: 'CargoScene',        name: 'Cargo Hall',     rect: { x: 130, y: 420, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Freight contracts',                available: true, icon: '📦' },
+    { id: 'cargo',    sceneKey: 'CargoScene',        name: 'Contracts Hall', rect: { x: 130, y: 420, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Cargo & charter contracts',        available: true, icon: '📋' },
     { id: 'security', sceneKey: 'SecurityScene',     name: 'Security',       rect: { x: 390, y: 420, w: 240, h: 130 }, color: 0x355a7d, desc: 'Sabotage missions and defense',    available: true, icon: '🛡' },
     { id: 'duty',     sceneKey: 'DutyFreeScene',     name: 'Duty Free',      rect: { x: 650, y: 420, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Buy items and boosts',             available: true, icon: '🛒' },
     { id: 'lounge',   sceneKey: 'LoungeScene',       name: 'VIP Lounge',     rect: { x: 910, y: 420, w: 240, h: 130 }, color: 0x2d4a6a, desc: 'Meet contacts, intrigue',          available: true, icon: '🥂' },
@@ -415,13 +415,13 @@ export class AirportScene extends Phaser.Scene {
   private roomTooltip(room: RoomDef): string {
     const s = GameState.get();
     const me = s.human;
-    const counts = { idle: 0, flying: 0, cargo: 0, maintenance: 0, ferry: 0 };
+    const counts = { idle: 0, flying: 0, cargo: 0, charter: 0, maintenance: 0, ferry: 0 };
     for (const p of me.planes) counts[p.status.kind]++;
 
     switch (room.id) {
       case 'office':
         return `Office\nFleet: ${me.planes.length}  ·  Routes: ${me.routes.length}\n`
-             + `Idle ${counts.idle}  Flying ${counts.flying}  Cargo ${counts.cargo}  Maint ${counts.maintenance}`;
+             + `Idle ${counts.idle}  Flying ${counts.flying}  Cargo ${counts.cargo}  Charter ${counts.charter}  Maint ${counts.maintenance}`;
       case 'travel':
         return `Travel Agency\n${me.routes.length} route${me.routes.length === 1 ? '' : 's'} on the books`;
       case 'shop':

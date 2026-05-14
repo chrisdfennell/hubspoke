@@ -9,6 +9,90 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-14 — Charter contracts + 4 new planes
+
+### Passenger charters
+
+New contract type paralleling cargo: pay-up-front passenger one-offs.
+"Fly N pax from A to B by day Z for $X." Same lifecycle — accept,
+dispatch, deliver — but uses passenger seats instead of cargo
+capacity, and pays a **1.5× premium** over what filling those seats
+at fair fare would yield. Real charter customers pay extra for
+guaranteed bulk seats and scheduling flexibility; the game now
+captures that.
+
+**Files:**
+- `state/Charter.ts` — `CharterContract` interface, `CharterStatus`
+  union (same shape as cargo).
+- `systems/Charters.ts` — full system: `rollCharter` generation,
+  `refreshCharterOffers` (top to 6 listings/day with 2–7 day lead),
+  `acceptCharter`, `dispatchCharter`, `landArrivedCharters`,
+  `expireMissedCharters`. Hooks daily for housekeeping + per-tick
+  for landings.
+- `state/Plane.ts` — new `'charter'` status variant matching the
+  cargo positioning-then-delivery shape (plane positions empty to
+  `from`, flies full to `to`, lands idle at destination).
+- `state/GameState.ts` — `charterOffers / charterActive /
+  charterCompleted / charterCounter` arrays, persisted in snapshot,
+  back-compat defaults to empty arrays.
+
+**Dispatch model**: identical to cargo — plane must be idle, have
+≥ paxCount seats, and have range ≥ city distance. Charges fuel for
+both positioning + delivery legs up front. Plane lands at
+destination on `arrivesAt`.
+
+**Pricing math**: `payment = paxCount × suggestedTicketPrice(dist) ×
+1.5`. A 100-pax LAX→JFK charter at $635 fair fare pays ~$95K — vs
+~$63K you'd net carrying the same pax on a regular route flight
+(and you don't need to fill the seats organically — the contract is
+guaranteed).
+
+### Contracts Hall (renamed from Cargo Hall)
+
+The cargo room button was the natural place to fold charters in.
+Renamed: **📦 Cargo Hall → 📋 Contracts Hall**. Inside, two tabs
+following the Workshop pattern:
+
+- **Cargo (N)** — existing cargo board, unchanged.
+- **Charter (N)** — new charter board.
+
+Counts in tab labels so you can see new offers without switching.
+Tab state persists within one visit; resets to Cargo on re-entry.
+
+### AI bids on charters
+
+New `aiBidCharter` mirrors `aiBidCargo`: scans the charter board
+for offers the AI can fulfil with an idle plane (seats + range),
+scores by net-of-fuel margin, accepts up to `cfg.aiCargoMaxPerDay`
+per day at ≥ `cfg.aiCargoMinMargin` margin (1/2/3/4 day at
+50/35/25/15% margin across Easy/Normal/Hard/Brutal). Reuses the
+existing cargo difficulty knobs — charters and cargo count as the
+same daily contract intake budget, which feels right since both
+compete for the same fleet attention.
+
+### 4 new planes in the catalog
+
+Filling the $130M–$360M gap between A220 ($80M) and B747 ($240M)
+that's been sparse:
+
+| Plane | Class | Price | Seats | Range | Fuel/km |
+|---|---|---|---|---|---|
+| Airbus A321neo | narrowbody | $130M | 220 | 7,400 km | 4.5 L |
+| Boeing 787-9 Dreamliner | widebody | $290M | 296 | 14,140 km | 11.5 L |
+| Airbus A350-900 | widebody | $320M | 325 | 15,000 km | 12.0 L |
+| Boeing 777-300ER | widebody | $360M | 396 | 13,650 km | 14.5 L |
+
+The A321neo plugs the narrowbody upgrade path between A220 and the
+B737. The B787 / A350 / B777 give three distinct widebody picks
+between the A220 tier and the A380 ($445M) — each with different
+seat/range/fuel tradeoffs so they're not just "more expensive A220s."
+
+These are now the natural target planes for big charters and long-
+haul cargo. AI rivals shop them through the existing buy + used-
+market logic without any further changes.
+
+---
+
 ## 2026-05-13 (phase 5) — Smarter AI: sponsors, lounge, loans
 
 Three player-only mechanics opened to AI participation. The symmetry

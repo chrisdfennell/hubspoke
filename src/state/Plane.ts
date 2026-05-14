@@ -5,6 +5,7 @@ export type PlaneStatus =
   | { kind: 'idle'; airportId: string }
   | { kind: 'flying'; routeId: string; from: string; to: string; departedAt: number; arrivesAt: number }
   | { kind: 'cargo'; contractId: string; from: string; to: string; departedAt: number; arrivesAt: number }
+  | { kind: 'charter'; contractId: string; from: string; to: string; departedAt: number; arrivesAt: number }
   | { kind: 'maintenance'; airportId: string; doneAt: number }
   /** Repositioning between hubs without revenue. Player-initiated; pays fuel
    *  upfront and the plane lands idle at `to`. */
