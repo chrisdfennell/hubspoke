@@ -41,6 +41,11 @@ export interface Scenario {
   hub: string;
   /** Optional CEO id (defaults to Mario's perks if unset). */
   ceoId?: string;
+  /** Override starting cash for the human player only. AI rivals still
+   *  get the difficulty preset's startCash. Use this when the scenario's
+   *  win condition is a money target that the difficulty's default cash
+   *  would already satisfy (e.g. First Million on Easy starts at $25M). */
+  startCashOverride?: number;
   /** Days to complete all objectives before the run fails. */
   deadlineDays: number;
   /** Win when every objective's progress >= target. */
@@ -57,6 +62,7 @@ export const SCENARIOS: Scenario[] = [
       'A simple goal: grow your starting capital. Hawaii is small but profitable — fly inter-island routes, manage your fuel, and you can hit a million net worth in two months.',
     difficulty: 'easy',
     hub: 'hnl',
+    startCashOverride: 250_000,
     deadlineDays: 60,
     objectives: [
       {

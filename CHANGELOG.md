@@ -9,6 +9,21 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-14 (later 9) — Fix: First Million scenario auto-won on day 1
+
+First Million's target is $1M net worth, but Easy difficulty starts you
+with $25M cash — instant Victory screen the moment the scenario booted.
+
+Added an optional `startCashOverride` field to `Scenario`. When set,
+`startCampaignRun` overwrites the human player's cash after bootstrap
+(AI rivals still use the difficulty preset's `startCash` so the world
+balance is unchanged). First Million now starts at **$250,000** — a
+quarter of the goal, with enough headroom to cover Easy's 3-pilot
+3-mechanic payroll ($2,850/day) while the player scales up Hawaii
+inter-island routes.
+
+Other scenarios don't set the override and keep their preset cash.
+
 ## 2026-05-14 (later 8) — Campaign mode
 
 Five scripted scenarios with hand-picked starting conditions,

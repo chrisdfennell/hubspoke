@@ -294,13 +294,16 @@ export class BootScene extends Phaser.Scene {
    *  + difficulty; airline + CEO use the catalog defaults so the run is
    *  one click away from the picker. */
   private startCampaignRun(slotId: number, scenario: Scenario) {
-    GameState.reset(
+    const state = GameState.reset(
       scenario.difficulty,
       scenario.ceoId,
       undefined,            // default Honey Air name + gold tail
       scenario.hub,
       scenario.id,
     );
+    if (typeof scenario.startCashOverride === 'number') {
+      state.human.cash = scenario.startCashOverride;
+    }
     setActiveSlot(slotId);
     this.go();
   }
