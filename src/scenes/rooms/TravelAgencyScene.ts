@@ -154,15 +154,15 @@ export class TravelAgencyScene extends RoomScene {
       const price = suggestedTicketPrice(dist, activeCity.demand, dest.demand);
       // Out-of-range: no plane in the fleet can reach this destination.
       // We still render the row + allow opening the route (player might
-      // buy a longer-range plane later), but everything reads dimmer.
+      // buy a longer-range plane later), but everything reads dimmer
+      // and the distance turns red. The "out of range" wording is in
+      // the section header instead of crammed onto every row.
       const outOfRange = fleetMaxRange > 0 && dist > fleetMaxRange;
       const rowColor = outOfRange ? COLORS.textDim : COLORS.text;
-      const distLabel = outOfRange
-        ? `${Math.round(dist)} km  (out of range)`
-        : `${Math.round(dist)} km`;
+      const distColor = outOfRange ? '#ff9aa6' : rowColor;
 
       this.addText(left,       y + 6, dest.name, 13, rowColor);
-      this.addText(left + 200, y + 6, distLabel, 13, outOfRange ? '#ff9aa6' : rowColor);
+      this.addText(left + 200, y + 6, `${Math.round(dist)} km`, 13, distColor);
       this.addText(left + 290, y + 6, formatMoney(price), 13, rowColor);
 
       const btn = new Button({
