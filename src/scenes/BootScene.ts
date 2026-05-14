@@ -29,6 +29,7 @@ import { formatMoney } from '../systems/Clock';
 import { Difficulty, DIFFICULTIES } from '../state/Difficulty';
 import { CEOS } from '../state/ceos';
 import { CITIES, getCity } from '../state/catalog';
+import { SCENARIOS, Scenario } from '../state/scenarios';
 import { sound } from '../systems/Sound';
 import { Modal } from '../ui/Modal';
 import { makePlaneIcon } from '../ui/PlaneIcon';
@@ -135,6 +136,14 @@ export class BootScene extends Phaser.Scene {
         fontStyle: 'italic',
       }).setOrigin(0, 0.5));
 
+      const campaignBtn = new Button({
+        scene: this,
+        x: left + w - 370, y: cy, width: 130, height: 32,
+        label: '🏆 Campaign',
+        bg: 0x3d2f6a,
+        bgHover: 0x5847a4,
+        onClick: () => this.openScenarioPicker(slot.id),
+      });
       const importBtn = new Button({
         scene: this,
         x: left + w - 230, y: cy, width: 130, height: 32,
@@ -145,10 +154,11 @@ export class BootScene extends Phaser.Scene {
       });
       const newBtn = new Button({
         scene: this,
-        x: left + w - 90, y: cy, width: 140, height: 32,
+        x: left + w - 90, y: cy, width: 130, height: 32,
         label: 'New Game',
         onClick: () => this.openDifficultyPicker(slot.id),
       });
+      this.slotLayer.add(campaignBtn);
       this.slotLayer.add(importBtn);
       this.slotLayer.add(newBtn);
       return;
@@ -278,6 +288,96 @@ export class BootScene extends Phaser.Scene {
     GameState.reset(difficulty, ceoId, customAirline, customHub);
     setActiveSlot(id);
     this.go();
+  }
+
+  /** Start a campaign run for the given scenario. The scenario sets hub
+   *  + difficulty; airline + CEO use the catalog defaults so the run is
+   *  one click away from the picker. */
+  private startCampaignRun(slotId: number, scenario: Scenario) {
+    GameState.reset(
+      scenario.difficulty,
+      scenario.ceoId,
+      undefined,            // default Honey Air name + gold tail
+      scenario.hub,
+      scenario.id,
+    );
+    setActiveSlot(slotId);
+    this.go();
+  }
+
+  /** Scenario picker overlay — list of available campaign scenarios.
+   *  Each card shows the scenario name, icon, difficulty, deadline, and
+   *  objective list. Click a card to immediately start the run. */
+  private openScenarioPicker(slotId: number) {
+    const overlay = this.add.container(0, 0).setDepth(50);
+    overlay.add(this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.7)
+      .setOrigin(0).setInteractive());
+    overlay.add(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 880, 600, COLORS.panel)
+      .setStrokeStyle(2, COLORS.panelBorder));
+
+    overlay.add(this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 270, '🏆 Campaign Scenarios', {
+      fontFamily: 'Segoe UI, Tahoma, sans-serif',
+      fontSize: '22px',
+      color: COLORS.accentText,
+      fontStyle: 'bold',
+    }).setOrigin(0.5));
+    overlay.add(this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 240,
+      'Each scenario has scripted starting conditions, objectives, and a deadline. Sandbox-style $1B victory is suppressed during campaigns.',
+      {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '12px',
+        color: COLORS.textDim,
+      }).setOrigin(0.5));
+
+    const cardW = 820;
+    const cardH = 88;
+    const startY = GAME_HEIGHT / 2 - 195;
+
+    SCENARIOS.forEach((scenario, i) => {
+      const cy = startY + i * (cardH + 6);
+      const card = this.add.rectangle(GAME_WIDTH / 2, cy, cardW, cardH, 0x1a3450)
+        .setStrokeStyle(1, 0x88c0e0);
+      card.setInteractive({ useHandCursor: true });
+      card.on('pointerover', () => card.setFillStyle(0x2a5780));
+      card.on('pointerout',  () => card.setFillStyle(0x1a3450));
+      card.on('pointerdown', () => {
+        overlay.destroy(true);
+        this.startCampaignRun(slotId, scenario);
+      });
+      overlay.add(card);
+
+      const leftEdge = GAME_WIDTH / 2 - cardW / 2 + 18;
+      overlay.add(this.add.text(leftEdge, cy - 28, `${scenario.icon}  ${scenario.name}`, {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '17px',
+        color: COLORS.accentText,
+        fontStyle: 'bold',
+      }).setOrigin(0, 0));
+      const hubCity = getCity(scenario.hub);
+      const meta = `${scenario.difficulty.toUpperCase()}  ·  Hub: ${hubCity.name}  ·  Deadline: ${scenario.deadlineDays} days`;
+      overlay.add(this.add.text(leftEdge, cy - 6, meta, {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '12px',
+        color: '#caa46a',
+      }).setOrigin(0, 0));
+      const objLine = scenario.objectives.map(o => '• ' + o.label).join('   ');
+      overlay.add(this.add.text(leftEdge, cy + 14, objLine, {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '11px',
+        color: COLORS.textDim,
+        wordWrap: { width: cardW - 60 },
+      }).setOrigin(0, 0));
+    });
+
+    const cancelBtn = new Button({
+      scene: this,
+      x: GAME_WIDTH / 2,
+      y: GAME_HEIGHT / 2 + 265,
+      width: 120, height: 32,
+      label: 'Cancel',
+      onClick: () => overlay.destroy(true),
+    });
+    overlay.add(cancelBtn);
   }
 
   /** Modal-ish overlay listing difficulty presets for a new game. */

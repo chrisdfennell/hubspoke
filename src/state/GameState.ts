@@ -223,6 +223,11 @@ export interface GameSnapshot {
   achievementsUnlocked?: string[];
   /** Career stats. Optional for backwards-compat with pre-stats saves. */
   stats?: GameStats;
+  /** Active campaign scenario id, or null/missing for sandbox games. */
+  scenarioId?: string | null;
+  /** Game-day index when the scenario was started — used to compute the
+   *  remaining-days countdown against `scenario.deadlineDays`. */
+  scenarioStartDay?: number;
 }
 
 export const SAVE_VERSION = 1;
@@ -295,6 +300,13 @@ export class GameState {
    *  room scenes; rendered in the Stats panel + game-over screen. */
   stats: GameStats = { ...DEFAULT_STATS };
 
+  /** Active campaign scenario id, or null for a sandbox game. Set by
+   *  GameState.reset() when starting from the campaign picker. */
+  scenarioId: string | null = null;
+  /** Game-day index when the scenario was started. Used to compute the
+   *  remaining-days countdown. */
+  scenarioStartDay: number = 0;
+
   static instance: GameState | null = null;
 
   static get(): GameState {
@@ -314,10 +326,19 @@ export class GameState {
     ceoId?: string,
     customAirline?: { name: string; color: number },
     customHub?: string,
+    scenarioId?: string,
   ): GameState {
     GameState.instance = new GameState();
     GameState.instance.difficulty = difficulty;
     GameState.instance.bootstrap(ceoId, customAirline, customHub);
+    if (scenarioId) {
+      GameState.instance.scenarioId = scenarioId;
+      // Day index: year*360 + month*30 + day-1. Matches the dateToDay
+      // shape in demandModifiers.
+      const d = GameState.instance.date;
+      GameState.instance.scenarioStartDay =
+        d.year * 12 * 30 + (d.month - 1) * 30 + (d.day - 1);
+    }
     return GameState.instance;
   }
 
@@ -364,6 +385,8 @@ export class GameState {
     // tiers across without re-firing them.
     s.achievementsUnlocked = [...(snap.achievementsUnlocked ?? snap.milestonesReached ?? [])];
     s.stats = { ...DEFAULT_STATS, ...(snap.stats ?? {}) };
+    s.scenarioId = snap.scenarioId ?? null;
+    s.scenarioStartDay = snap.scenarioStartDay ?? 0;
     restoreModifiers(snap.demandModifiers);
     restoreHazards(snap.weatherHazards);
     setFuelPrice(snap.fuelPrice);
@@ -409,6 +432,8 @@ export class GameState {
       activeHub: this.activeHub,
       achievementsUnlocked: [...this.achievementsUnlocked],
       stats: { ...this.stats },
+      scenarioId: this.scenarioId,
+      scenarioStartDay: this.scenarioStartDay,
     };
   }
 

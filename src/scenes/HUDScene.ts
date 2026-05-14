@@ -9,6 +9,7 @@ import { creditLimit, effectiveLoanApr, SAVINGS_APY } from '../systems/Bank';
 import { portfolioValue } from '../systems/Stocks';
 import { DIFFICULTIES } from '../state/Difficulty';
 import { netWorth, BILLIONAIRE_VICTORY, MILESTONES, Milestone } from '../systems/Milestones';
+import { evaluateScenario } from '../state/scenarios';
 import { Modal } from '../ui/Modal';
 import { getCEO } from '../state/ceos';
 import { consumePendingPaper } from '../systems/Newspaper';
@@ -46,6 +47,12 @@ export class HUDScene extends Phaser.Scene {
   /** Tutorial banner instance — only created on a fresh run (no flights
    *  yet AND localStorage flag not set). Cleared via the dismiss callback. */
   private tutorialBanner: TutorialBanner | null = null;
+
+  /** Mission HUD widgets — visible only during a campaign scenario. */
+  private missionContainer!: Phaser.GameObjects.Container;
+  private missionTitle!: Phaser.GameObjects.Text;
+  private missionStats!: Phaser.GameObjects.Text;
+  private missionDeadline!: Phaser.GameObjects.Text;
 
   constructor() { super({ key: 'HUDScene', active: false }); }
 
@@ -150,6 +157,31 @@ export class HUDScene extends Phaser.Scene {
       this.scene.pause('AirportScene');
       this.scene.launch('NewsScene');
     });
+
+    // Mission HUD overlay — appears under the top bar when a campaign
+    // scenario is active. Position: top-right of the play area, below
+    // the speed buttons. Hidden during sandbox runs.
+    this.missionContainer = this.add.container(GAME_WIDTH - 240, 50).setDepth(20).setVisible(false);
+    const missionBg = this.add.rectangle(0, 0, 230, 70, 0x1a3450, 0.92)
+      .setOrigin(0)
+      .setStrokeStyle(1, 0x88c0e0);
+    this.missionTitle = this.add.text(8, 6, '', {
+      fontFamily: 'Segoe UI, Tahoma, sans-serif',
+      fontSize: '12px',
+      color: COLORS.accentText,
+      fontStyle: 'bold',
+    });
+    this.missionStats = this.add.text(8, 24, '', {
+      fontFamily: 'Segoe UI, Tahoma, sans-serif',
+      fontSize: '11px',
+      color: COLORS.text,
+    });
+    this.missionDeadline = this.add.text(8, 50, '', {
+      fontFamily: 'Segoe UI, Tahoma, sans-serif',
+      fontSize: '11px',
+      color: COLORS.textDim,
+    });
+    this.missionContainer.add([missionBg, this.missionTitle, this.missionStats, this.missionDeadline]);
 
     this.refresh();
     this.refreshTickerContent();
@@ -411,15 +443,39 @@ export class HUDScene extends Phaser.Scene {
       return;
     }
 
-    // Victory by net worth: build up to a billion.
+    // Campaign mode: scenario objectives + deadline take precedence over
+    // sandbox-style victories. A scenario only ends on its own terms —
+    // satisfying every objective wins; missing the deadline fails.
+    const scenarioProgress = evaluateScenario(s);
+    if (scenarioProgress) {
+      if (scenarioProgress.allComplete) {
+        this.fireGameOver('victory',
+          `★ Campaign complete: ${scenarioProgress.scenario.name}. ` +
+          `${scenarioProgress.objectives.length} objectives met in ${scenarioProgress.daysElapsed} days.`);
+        return;
+      }
+      if (scenarioProgress.deadlinePassed) {
+        const completed = scenarioProgress.objectives.filter(o => o.complete).length;
+        this.fireGameOver('defeat',
+          `Campaign failed: ${scenarioProgress.scenario.name}. ` +
+          `Only ${completed} of ${scenarioProgress.objectives.length} objectives met by the deadline.`);
+        return;
+      }
+      // Scenario still running — skip sandbox victories below so the run
+      // doesn't end prematurely on a $1B net-worth crossing.
+      return;
+    }
+
+    // Sandbox victory by net worth: build up to a billion.
     const nw = netWorth(human);
     if (nw >= BILLIONAIRE_VICTORY) {
       this.fireGameOver('victory', `${human.name} reached ${formatMoney(nw)} net worth — a billion-dollar empire.`);
       return;
     }
 
-    // Victory: every rival has been taken over (by anyone, doesn't have to be you,
-    // but as long as you're standing among the unaquired you've effectively won).
+    // Sandbox victory: every rival has been taken over (by anyone, doesn't have
+    // to be you, but as long as you're standing among the unaquired you've
+    // effectively won).
     const livingRivals = s.players.filter(p => p.id !== human.id && !s.takenOverBy[p.id]);
     if (livingRivals.length === 0 && s.players.length > 1) {
       this.fireGameOver('victory', `All rivals eliminated. ${human.name} dominates the skies.`);
@@ -469,8 +525,32 @@ export class HUDScene extends Phaser.Scene {
     return lines.join('\n');
   }
 
+  /** Refresh the campaign-scenario mission HUD overlay. Hidden entirely
+   *  during sandbox runs (no scenario active). When visible, shows the
+   *  scenario name, objective-progress count, and days remaining. */
+  private refreshMissionHUD(s: GameState) {
+    const progress = evaluateScenario(s);
+    if (!progress) {
+      this.missionContainer.setVisible(false);
+      return;
+    }
+    this.missionContainer.setVisible(true);
+    const { scenario, objectives, daysRemaining } = progress;
+    const done = objectives.filter(o => o.complete).length;
+    this.missionTitle.setText(`${scenario.icon}  ${scenario.name}`);
+    this.missionStats.setText(`Objectives: ${done} / ${objectives.length} complete`);
+    const dayColor = daysRemaining <= 7 ? '#ff9aa6'
+                  : daysRemaining <= 30 ? '#caa46a'
+                  : COLORS.textDim;
+    this.missionDeadline.setColor(dayColor);
+    this.missionDeadline.setText(daysRemaining > 0
+      ? `${daysRemaining} days remaining`
+      : `Deadline passed — ${Math.abs(daysRemaining)} days overdue`);
+  }
+
   private refresh() {
     const s = GameState.get();
+    this.refreshMissionHUD(s);
     this.airlineText.setText(s.human.name);
     this.dateText.setText(formatDate(s.date));
     this.moneyText.setText(formatMoney(s.human.cash));

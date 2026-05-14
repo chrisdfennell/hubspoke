@@ -9,6 +9,64 @@ gameplay reasoning behind the change.
 
 ---
 
+## 2026-05-14 (later 8) — Campaign mode
+
+Five scripted scenarios with hand-picked starting conditions,
+objectives, and deadlines. Sandbox win conditions ($1B net worth,
+all rivals eliminated) are suppressed during a campaign — the run
+resolves only on the scenario's own terms.
+
+### Scenarios shipped
+
+| Icon | Name | Difficulty | Hub | Deadline | Objective(s) |
+|---|---|---|---|---|---|
+| 💰 | **First Million** | easy | HNL | 60 days | $1M net worth |
+| 📦 | **Cargo King** | normal | JFK | 180 days | 30 deliveries + 200,000 kg lifetime |
+| 🌐 | **Empire Builder** | normal | LAX | 360 days | 5 routes + 10 planes + $50M net worth |
+| 🌍 | **Globetrotter** | normal | LHR | 360 days | 4 hubs + 15 routes |
+| ☠ | **Hostile Takeover** | hard | JFK | 360 days | 500,000+ Falcon Lines shares |
+
+### Architecture
+
+- `state/scenarios.ts` — `Scenario` + `ScenarioObjective` types,
+  SCENARIOS registry, `evaluateScenario(state)` helper that returns
+  live progress + deadline status.
+- `GameState.scenarioId` + `scenarioStartDay` — persisted in saves
+  so a campaign survives reload.
+- `GameState.reset(..., scenarioId?)` — fifth optional parameter
+  binds the scenario at game-start.
+
+### Flow
+
+`Save slot → 🏆 Campaign button → Scenario picker → click card → run starts`
+
+The scenario picker shows all five cards stacked vertically with
+icon, name, difficulty/hub/deadline meta, and a bulleted objective
+list. Clicking a scenario starts the run immediately — using the
+scenario's preset difficulty + hub, default airline name (renameable
+in-game via Office).
+
+### Mission HUD
+
+Always-visible overlay at top-right of the play area showing:
+- Scenario name + icon
+- Objectives complete (e.g. `2 / 3 complete`)
+- Days remaining (turns amber ≤30, red ≤7, "deadline passed" after)
+
+Hidden entirely during sandbox runs.
+
+### Win/lose detection
+
+`HUDScene.checkGameOver` now branches on `evaluateScenario(state)`:
+- **All objectives complete** → victory game-over.
+- **Deadline passed** → defeat game-over with objectives-met count.
+- **Still running** → skip sandbox-style victories so the run doesn't
+  end prematurely on a $1B net-worth crossing.
+- Bankruptcy and creditor seizure still end campaigns the same way
+  they end sandbox runs.
+
+---
+
 ## 2026-05-14 (later 7) — Creative mode
 
 A new 5th difficulty added to the picker — the no-friction sandbox.
